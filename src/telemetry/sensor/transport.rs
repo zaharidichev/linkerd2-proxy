@@ -6,8 +6,8 @@ use std::time::Instant;
 use tokio_connect;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use connection::{self, Peek};
-use ctx;
+use connection::{self, Peek, HasTlsStatus};
+use ctx::{self, transport::TlsStatus};
 use telemetry::event;
 
 /// Wraps a transport with telemetry.
@@ -186,6 +186,12 @@ impl<T: AsyncRead + AsyncWrite + Peek> Peek for Transport<T> {
 
     fn peeked(&self) -> &[u8] {
         self.0.peeked()
+    }
+}
+
+impl<T: HasTlsStatus> HasTlsStatus for Transport<T> {
+    fn tls_status(&self) -> TlsStatus {
+        self.0.tls_status()
     }
 }
 

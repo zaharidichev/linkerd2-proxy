@@ -340,8 +340,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "hyper"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.12.5"
+source = "git+https://github.com/hyperium/hyper.git?branch=client-transport-extra#37df3d9fceba18d85c02137facfda6a9d00f52bd"
 dependencies = [
  "bytes 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -482,7 +482,7 @@ dependencies = [
  "h2 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "http 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "httparse 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "hyper 0.12.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hyper 0.12.5 (git+https://github.com/hyperium/hyper.git?branch=client-transport-extra)",
  "indexmap 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "inotify 0.5.2-dev (git+https://github.com/hawkw/inotify?branch=eliza/mio)",
  "ipnet 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1585,7 +1585,7 @@ dependencies = [
 "checksum hostname 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "58fab6e177434b0bb4cd344a4dabaa5bd6d7a8d792b1885aebcae7af1091d1cb"
 "checksum http 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)" = "4fbced8864b04c030eebcb7d0dc3a81ba5231ac559f5116a29a8ba83ecee22cd"
 "checksum httparse 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "c2f407128745b78abc95c0ffbe4e5d37427fdc0d45470710cfef8c44522a2e37"
-"checksum hyper 0.12.3 (registry+https://github.com/rust-lang/crates.io-index)" = "f31c3ce511142fac936539abd3315bdc303a6e501fac5b77e0824310d542d081"
+"checksum hyper 0.12.5 (git+https://github.com/hyperium/hyper.git?branch=client-transport-extra)" = "<none>"
 "checksum idna 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "014b298351066f1512874135335d62a789ffe78a9974f94b43ed5621951eaf7d"
 "checksum indexmap 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7b9378f1f3923647a9aea6af4c6b5de68cc8a71415459ad25ef191191c48f5b7"
 "checksum inotify 0.5.2-dev (git+https://github.com/hawkw/inotify?branch=eliza/mio)" = "<none>"

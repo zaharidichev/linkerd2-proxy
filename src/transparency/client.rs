@@ -9,6 +9,7 @@ use tower_service::{Service, NewService};
 use tower_h2;
 
 use bind;
+use connection::HasTlsStatus;
 use task::BoxExecutor;
 use telemetry::sensor::http::RequestBody;
 use super::glue::{BodyPayload, HttpBody, HyperConnect};
@@ -91,7 +92,7 @@ impl<C, E, B> Client<C, E, B>
 where
     C: Connect + Clone + Send + Sync + 'static,
     C::Future: Send + 'static,
-    C::Connected: Send,
+    C::Connected: HasTlsStatus + Send,
     E: Executor + Clone,
     E: future::Executor<Box<Future<Item = (), Error = ()> + Send + 'static>> + Send + Sync + 'static,
     B: tower_h2::Body + Send + 'static,
@@ -130,7 +131,7 @@ impl<C, E, B> NewService for Client<C, E, B>
 where
     C: Connect + Clone + Send + Sync + 'static,
     C::Future: Send + 'static,
-    C::Connected: Send,
+    C::Connected: HasTlsStatus + Send,
     E: Executor + Clone,
     E: future::Executor<Box<Future<Item = (), Error = ()> + Send + 'static>> + Send + Sync + 'static,
     B: tower_h2::Body + Send + 'static,
@@ -190,7 +191,7 @@ where
 impl<C, E, B> Service for ClientService<C, E, B>
 where
     C: Connect + Send + Sync + 'static,
-    C::Connected: Send,
+    C::Connected: HasTlsStatus + Send,
     C::Future: Send + 'static,
     E: Executor + Clone,
     E: future::Executor<Box<Future<Item = (), Error = ()> + Send + 'static>> + Send + Sync + 'static,

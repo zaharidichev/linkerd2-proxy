@@ -14,6 +14,7 @@ use tower_service::{Service, NewService};
 use tower_h2;
 
 use ctx::transport::{Server as ServerCtx};
+use connection::HasTlsStatus;
 use drain;
 use super::h1;
 use super::upgrade::Http11Upgrade;
@@ -408,8 +409,8 @@ where
 impl<C> hyper_connect::Connect for HyperConnect<C>
 where
     C: Connect + Send + Sync,
+    C::Connected: HasTlsStatus + Send + 'static,
     C::Future: Send + 'static,
-    C::Connected: Send + 'static,
 {
     type Transport = C::Connected;
     type Error = io::Error;
@@ -426,6 +427,7 @@ where
 impl<F> Future for HyperConnectFuture<F>
 where
     F: Future,
+    F::Item: HasTlsStatus,
 {
     type Item = (F::Item, hyper_connect::Connected);
     type Error = io::Error;
@@ -436,7 +438,9 @@ where
                 .map_err(|_| io::Error::from(io::ErrorKind::Other))
         );
         let connected = hyper_connect::Connected::new()
-            .proxy(self.absolute_form);
+            .proxy(self.absolute_form)
+            .extra(transport.tls_status())
+            ;
         Ok(Async::Ready((transport, connected)))
     }
 }

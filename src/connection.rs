@@ -20,6 +20,16 @@ pub struct BoundPort {
     local_addr: SocketAddr,
 }
 
+pub trait HasTlsStatus {
+    fn tls_status(&self) -> TlsStatus;
+}
+
+impl HasTlsStatus for Connection {
+    fn tls_status(&self) -> TlsStatus {
+        self.tls_status
+    }
+}
+
 /// Initiates a client connection to the given address.
 pub fn connect(addr: &SocketAddr,
                tls: tls::ConditionalConnectionConfig<tls::ClientConfig>)
