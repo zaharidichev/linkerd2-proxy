@@ -32,7 +32,7 @@ fn main() {
             info!("using thread pool with {} workers", n);
             let mut pool_builder = thread_pool::Builder::new();
             pool_builder
-                .name_prefix("linkerd2-worker-")
+                .name_prefix("worker-")
                 // Note: we may want to tune other pool parameters later,
                 // or make them configurable with env variables.
                 .pool_size(n);

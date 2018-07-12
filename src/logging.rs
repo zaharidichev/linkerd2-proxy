@@ -3,6 +3,7 @@ use std::env;
 use std::io::Write;
 use std::fmt;
 use std::net::SocketAddr;
+use std::thread;
 use std::sync::Arc;
 
 use env_logger;
@@ -27,14 +28,11 @@ pub fn init() {
                     Level::Warn => "WARN",
                     Level::Error => "ERR!",
                 };
-                writeln!(
-                   fmt,
-                    "{} {}{} {}",
-                    level,
-                    Context(&ctxt.borrow()),
-                    record.target(),
-                    record.args()
-                )
+                write!(fmt, "{} {}", level, Context(&ctxt.borrow()))?;
+                if let Some(thread) = thread::current().name() {
+                    write!(fmt, "{} ", thread)?;
+                }
+                writeln!(fmt, "{} {}", record.target(), record.args())
             })
         })
         .parse(&env::var(ENV_LOG).unwrap_or_default())
