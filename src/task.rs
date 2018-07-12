@@ -14,6 +14,7 @@ use tokio::{
     },
     runtime::{self as thread_pool, current_thread},
 };
+use tokio_io_pool;
 
 use std::{
     error::Error as StdError,
@@ -58,6 +59,7 @@ pub struct ErasedExecutor(Box<Executor<BoxSendFuture> + Send + Sync>);
 pub enum MainRuntime {
     CurrentThread(current_thread::Runtime),
     ThreadPool(thread_pool::Runtime),
+    IoPool(tokio_io_pool::Runtime),
 }
 
 /// Like a `SpawnError` or `ExecuteError`, but with an implementation
@@ -198,6 +200,7 @@ impl MainRuntime {
         match *self {
             MainRuntime::CurrentThread(ref mut rt) => { rt.spawn(future); }
             MainRuntime::ThreadPool(ref mut rt) => {  rt.spawn(future); }
+            MainRuntime::IoPool(ref mut rt) => { rt.spawn(future).unwrap(); }
         };
         self
     }
@@ -214,6 +217,8 @@ impl MainRuntime {
                 shutdown_signal
                     .and_then(move |()| rt.shutdown_now())
                     .wait(),
+            MainRuntime::IoPool(mut rt) =>
+                rt.block_on(shutdown_signal),
         }
     }
 }
@@ -232,6 +237,12 @@ impl From<thread_pool::Runtime> for MainRuntime {
     }
 }
 
+impl From<tokio_io_pool::Runtime> for MainRuntime {
+    fn from(rt: tokio_io_pool::Runtime) -> Self {
+        debug!("creating proxy with io pool");
+        MainRuntime::IoPool(rt)
+    }
+}
 // ===== impl Error =====
 
 impl Error {

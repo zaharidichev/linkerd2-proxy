@@ -4,11 +4,12 @@ extern crate linkerd2_proxy;
 
 #[macro_use] extern crate log;
 extern crate tokio;
+extern crate tokio_io_pool;
 
 use std::process;
 
 use tokio::{
-    executor::thread_pool,
+    // executor::thread_pool,
     runtime,
 };
 
@@ -30,14 +31,11 @@ fn main() {
     let runtime: MainRuntime = match config.worker_threads {
         Some(n) if n > 1 => {
             info!("using thread pool with {} workers", n);
-            let mut pool_builder = thread_pool::Builder::new();
-            pool_builder
+            tokio_io_pool::Builder::default()
                 .name_prefix("worker-")
                 // Note: we may want to tune other pool parameters later,
                 // or make them configurable with env variables.
-                .pool_size(n);
-            runtime::Builder::new()
-                .threadpool_builder(pool_builder)
+                .pool_size(n)
                 .build()
                 .expect("initialize main thread pool")
                 .into()
