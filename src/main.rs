@@ -7,6 +7,13 @@ extern crate tokio;
 
 use std::process;
 
+use tokio::{
+    executor::thread_pool,
+    runtime,
+};
+
+use linkerd2_proxy::task::MainRuntime;
+
 mod signal;
 
 // Look in lib.rs.
@@ -19,10 +26,29 @@ fn main() {
             process::exit(64)
         }
     };
-    // NOTE: eventually, this is where we would choose to use the threadpool
-    //       runtime instead, if acting as an ingress proxy.
-    let runtime = tokio::runtime::current_thread::Runtime::new()
-        .expect("initialize main runtime");
+
+    let runtime: MainRuntime = match config.worker_threads {
+        Some(n) if n > 1 => {
+            info!("using thread pool with {} workers", n);
+            let mut pool_builder = thread_pool::Builder::new();
+            pool_builder
+                .name_prefix("linkerd2-worker-")
+                // Note: we may want to tune other pool parameters later,
+                // or make them configurable with env variables.
+                .pool_size(n);
+            runtime::Builder::new()
+                .threadpool_builder(pool_builder)
+                .build()
+                .expect("initialize main thread pool")
+                .into()
+        },
+        _ => {
+            info!("using single-threaded exexutor");
+            runtime::current_thread::Runtime::new()
+                .expect("initialize main runtime")
+                .into()
+        }
+    };
     let main = linkerd2_proxy::Main::new(
         config,
         linkerd2_proxy::SoOriginalDst,

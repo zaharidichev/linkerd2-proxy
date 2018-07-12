@@ -85,6 +85,12 @@ pub struct Config {
 
     /// Optional maximum TTL for DNS lookups.
     pub dns_max_ttl: Option<Duration>,
+
+    /// Optional number of threadpool workers.
+    ///
+    /// If this is set and is greater than 1, the proxy will use the threadpool
+    /// executor. Otherwise, it will use the single-threaded executor.
+    pub worker_threads: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -205,6 +211,7 @@ const ENV_DNS_MIN_TTL: &str = "LINKERD2_PROXY_DNS_MIN_TTL";
 ///
 /// Lookups with TTLs above this value will use this value instead.
 const ENV_DNS_MAX_TTL: &str = "LINKERD2_PROXY_DNS_MAX_TTL";
+const ENV_WORKER_THREADS: &str = "LINKERD2_PROXY_WORKER_THREADS";
 
 // Default values for various configuration fields
 const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 10_000; // FIXME
@@ -281,6 +288,7 @@ impl<'a> TryFrom<&'a Strings> for Config {
         let metrics_retain_idle = parse(strings, ENV_METRICS_RETAIN_IDLE, parse_duration);
         let dns_min_ttl = parse(strings, ENV_DNS_MIN_TTL, parse_duration);
         let dns_max_ttl = parse(strings, ENV_DNS_MAX_TTL, parse_duration);
+        let worker_threads = parse(strings, ENV_WORKER_THREADS, parse_number);
         let pod_namespace = strings.get(ENV_POD_NAMESPACE).and_then(|maybe_value| {
             // There cannot be a default pod namespace, and the pod namespace is required.
             maybe_value.ok_or_else(|| {
@@ -420,6 +428,8 @@ impl<'a> TryFrom<&'a Strings> for Config {
             dns_min_ttl: dns_min_ttl?,
 
             dns_max_ttl: dns_max_ttl?,
+
+            worker_threads: worker_threads?,
         })
     }
 }
