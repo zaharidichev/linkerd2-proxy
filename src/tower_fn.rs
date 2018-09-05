@@ -5,10 +5,9 @@ pub struct NewServiceFn<T> {
     f: T,
 }
 
-impl<T, N, R> NewServiceFn<T>
+impl<T, N> NewServiceFn<T>
 where
     T: Fn() -> N,
-    N: Service<R>,
 {
     pub fn new(f: T) -> Self {
         NewServiceFn {

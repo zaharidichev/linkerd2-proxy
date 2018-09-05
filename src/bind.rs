@@ -68,7 +68,7 @@ where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,
 {
-    inner: <Stack<B> as tower::Service>::Future,
+    inner: <Stack<B> as tower::Service<http::Request<B>>>::Future,
 }
 
 /// A type of service binding.
@@ -83,7 +83,7 @@ where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,
 {
-    Bound(WatchService<tls::ConditionalClientConfig, RebindTls<B>>),
+    Bound(Stack<B>),
     BindsPerRequest {
         // When `poll_ready` is called, the _next_ service to be used may be bound
         // ahead-of-time. This stack is used only to serve the next request to this
@@ -147,9 +147,9 @@ pub struct RebindTls<B> {
 
 pub type Service<B> = BoundService<B>;
 
-pub type Stack<B> = WatchService<tls::ConditionalClientConfig, RebindTls<B>>;
+pub type Stack<B> = WatchService<tls::ConditionalClientConfig, RebindTls<B>, http::Request<B>>;
 
-type ReconnectStack<B> = Reconnect<NewHttp<B>>;
+type ReconnectStack<B> = Reconnect<NewHttp<B>, http::Request<B>>;
 
 pub type NewHttp<B> = orig_proto::Upgrade<NormalizeUri<telemetry::http::service::NewHttp<Client<B>, B, HttpBody>>>;
 
@@ -368,7 +368,7 @@ impl<C, B> Bind<C, B> {
     }
 }
 
-impl<B> NewClient for BindProtocol<ctx::Proxy, B>
+impl<B> NewClient<http::Request<B>> for BindProtocol<ctx::Proxy, B>
 where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,
@@ -392,22 +392,21 @@ impl<S> NormalizeUri<S> {
     }
 }
 
-impl<S, B> tower::NewService for NormalizeUri<S>
+impl<S, B> tower::NewService<http::Request<B>> for NormalizeUri<S>
 where
     S: tower::NewService<
-        Request=http::Request<B>,
+        http::Request<B>,
         Response=HttpResponse,
     >,
     S::Service: tower::Service<
-        Request=http::Request<B>,
+        http::Request<B>,
         Response=HttpResponse,
     >,
-    NormalizeUri<S::Service>: tower::Service,
+    NormalizeUri<S::Service>: tower::Service<http::Request<B>>,
     B: tower_h2::Body,
 {
-    type Request = <Self::Service as tower::Service>::Request;
-    type Response = <Self::Service as tower::Service>::Response;
-    type Error = <Self::Service as tower::Service>::Error;
+    type Response = <Self::Service as tower::Service<http::Request<B>>>::Response;
+    type Error = <Self::Service as tower::Service<http::Request<B>>>::Error;
     type Service = NormalizeUri<S::Service>;
     type InitError = S::InitError;
     type Future = future::Map<
@@ -427,15 +426,14 @@ where
     }
 }
 
-impl<S, B> tower::Service for NormalizeUri<S>
+impl<S, B> tower::Service<http::Request<B>> for NormalizeUri<S>
 where
     S: tower::Service<
-        Request=http::Request<B>,
+        http::Request<B>,
         Response=HttpResponse,
     >,
     B: tower_h2::Body,
 {
-    type Request = S::Request;
     type Response = HttpResponse;
     type Error = S::Error;
     type Future = S::Future;
@@ -444,7 +442,7 @@ where
         self.inner.poll_ready()
     }
 
-    fn call(&mut self, mut request: S::Request) -> Self::Future {
+    fn call(&mut self, mut request: http::Request<B>) -> Self::Future {
         if request.version() != http::Version::HTTP_2 &&
             // Skip normalizing the URI if it was received in
             // absolute form.
@@ -457,14 +455,13 @@ where
 }
 // ===== impl Binding =====
 
-impl<B> tower::Service for BoundService<B>
+impl<B> tower::Service<http::Request<B>> for BoundService<B>
 where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,
 {
-    type Request = <Stack<B> as tower::Service>::Request;
-    type Response = <Stack<B> as tower::Service>::Response;
-    type Error = <NewHttp<B> as tower::NewService>::Error;
+    type Response = <Stack<B> as tower::Service<http::Request<B>>>::Response;
+    type Error = <NewHttp<B> as tower::NewService<http::Request<B>>>::Error;
     type Future = ResponseFuture<B>;
 
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
@@ -535,7 +532,7 @@ where
         }
     }
 
-    fn call(&mut self, request: Self::Request) -> Self::Future {
+    fn call(&mut self, request: http::Request<B>) -> Self::Future {
         let inner = match self.binding {
             Binding::Bound(ref mut svc) => svc.call(request),
             Binding::BindsPerRequest { ref mut next } => {
@@ -552,8 +549,8 @@ where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,
 {
-    type Item = <Stack<B> as tower::Service>::Response;
-    type Error = <NewHttp<B> as tower::NewService>::Error;
+    type Item = <Stack<B> as tower::Service<http::Request<B>>>::Response;
+    type Error = <NewHttp<B> as tower::NewService<http::Request<B>>>::Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         self.inner.poll().map_err(|e| match e {
@@ -634,7 +631,7 @@ impl Host {
 
 // ===== impl RebindTls =====
 
-impl<B> Rebind<tls::ConditionalClientConfig> for RebindTls<B>
+impl<B> Rebind<tls::ConditionalClientConfig, http::Request<B>> for RebindTls<B>
 where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,

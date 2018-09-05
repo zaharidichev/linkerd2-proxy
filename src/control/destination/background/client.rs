@@ -2,6 +2,7 @@ use std::{
     fmt,
     io,
     time::{Duration, Instant},
+    marker::PhantomData,
 };
 
 use bytes::Bytes;
@@ -37,7 +38,7 @@ pub(super) struct ClientService(AddOrigin<Backoff<LogErrors<Reconnect<
             BoxBody,
         >, http::Request<BoxBody>
     >
->>>);
+>, http::Request<BoxBody>>>);
 
 /// The state needed to bind a new controller client stack.
 pub(super) struct BindClient {
@@ -50,11 +51,12 @@ pub(super) struct BindClient {
 
 /// Wait a duration if inner `poll_ready` returns an error.
 //TODO: move to tower-backoff
-struct Backoff<S> {
+struct Backoff<S: Service<R>, R> {
     inner: S,
     timer: Delay,
     waiting: bool,
     wait_dur: Duration,
+    _req: PhantomData<fn() -> R>,
 }
 
 /// Log errors talking to the controller in human format.
@@ -166,7 +168,7 @@ impl Rebind<tls::ConditionalClientConfig, http::Request<BoxBody>> for BindClient
 
 // ===== impl Backoff =====
 
-impl<S, R> Backoff<S>
+impl<S, R> Backoff<S, R>
 where
     S: Service<R>,
 {
@@ -176,6 +178,7 @@ where
             timer: Delay::new(Instant::now() + wait_dur),
             waiting: false,
             wait_dur,
+            _req: PhantomData,
         }
     }
 
@@ -194,7 +197,7 @@ where
     }
 }
 
-impl<S, R> Service<R> for Backoff<S>
+impl<S, R> Service<R> for Backoff<S, R>
 where
     S: Service<R>,
     S::Error: fmt::Debug,
@@ -227,10 +230,7 @@ where
 
 // ===== impl LogErrors =====
 
-impl<S, R> LogErrors<S>
-where
-    S: Service<R, Error=LogError>,
-{
+impl<S> LogErrors<S> {
     fn new(service: S) -> Self {
         LogErrors {
             inner: service,

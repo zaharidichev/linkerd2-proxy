@@ -8,10 +8,10 @@ use http::header::CONTENT_LENGTH;
 use tower_service::Service;
 
 /// Map an HTTP service's error to an appropriate 500 response.
-pub struct MapErr<T, E, F> {
+pub struct MapErr<T, E, F, R> {
     inner: T,
     f: Arc<F>,
-    _p: PhantomData<E>,
+    _p: PhantomData<(E, R)>,
 }
 
 /// Catches errors from the inner future and maps them to 500 responses.
@@ -24,7 +24,7 @@ pub struct ResponseFuture<T, E, F> {
 
 // ===== impl MapErr =====
 
-impl<T, E, F, R> MapErr<T, E, F>
+impl<T, E, F, R> MapErr<T, E, F, R>
 where
     T: Service<R, Error = E>,
     F: Fn(E) -> http::StatusCode,
@@ -39,7 +39,7 @@ where
     }
 }
 
-impl<T, B, E, F, R> Service<R> for MapErr<T, E, F>
+impl<T, B, E, F, R> Service<R> for MapErr<T, E, F, R>
 where
     T: Service<R, Response = http::Response<B>, Error = E>,
     B: Default,

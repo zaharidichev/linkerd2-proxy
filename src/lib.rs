@@ -305,7 +305,7 @@ where
         // Setup the public listener. This will listen on a publicly accessible
         // address and listen for inbound connections that should be forwarded
         // to the managed application (private destination).
-        let inbound: drain::Watching<_, _> = {
+        let inbound = {
             let ctx = ctx::Proxy::Inbound;
             let bind = bind.clone().with_ctx(ctx);
             let default_addr = config.private_forward.map(|a| a.into());
