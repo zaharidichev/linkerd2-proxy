@@ -29,7 +29,7 @@ use super::tcp;
 /// service.
 pub struct Server<S, B, G>
 where
-    S: NewService<Request=http::Request<HttpBody>>,
+    S: NewService<http::Request<HttpBody>>,
     S::Future: 'static,
     B: tower_h2::Body,
 {
@@ -53,12 +53,12 @@ where
 impl<S, B, G> Server<S, B, G>
 where
     S: NewService<
-        Request = http::Request<HttpBody>,
+        http::Request<HttpBody>,
         Response = http::Response<B>
     > + Clone + Send + 'static,
     S::Future: 'static,
-    <S as NewService>::Service: Send,
-    <<S as NewService>::Service as ::tower_service::Service>::Future: Send,
+    <S as NewService<http::Request<HttpBody>>>::Service: Send,
+    <<S as NewService<http::Request<HttpBody>>>::Service as ::tower_service::Service<http::Request<HttpBody>>>::Future: Send,
     S::InitError: fmt::Debug,
     S::Future: Send + 'static,
     B: tower_h2::Body + 'static,
