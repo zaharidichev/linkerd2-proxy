@@ -24,9 +24,9 @@ pub struct ResponseFuture<T, E, F> {
 
 // ===== impl MapErr =====
 
-impl<T, E, F> MapErr<T, E, F>
+impl<T, E, F, R> MapErr<T, E, F>
 where
-    T: Service<Error = E>,
+    T: Service<R, Error = E>,
     F: Fn(E) -> http::StatusCode,
 {
     /// Crete a new `MapErr`
@@ -39,13 +39,12 @@ where
     }
 }
 
-impl<T, B, E, F> Service for MapErr<T, E, F>
+impl<T, B, E, F, R> Service<R> for MapErr<T, E, F>
 where
-    T: Service<Response = http::Response<B>, Error = E>,
+    T: Service<R, Response = http::Response<B>, Error = E>,
     B: Default,
     F: Fn(E) -> http::StatusCode,
 {
-    type Request = T::Request;
     type Response = T::Response;
     type Error = h2::Error;
     type Future = ResponseFuture<T::Future, E, F>;
@@ -56,7 +55,7 @@ where
             .map_err(|_| h2::Reason::INTERNAL_ERROR.into())
     }
 
-    fn call(&mut self, request: Self::Request) -> Self::Future {
+    fn call(&mut self, request: R) -> Self::Future {
         let inner = self.inner.call(request);
         ResponseFuture {
             inner,

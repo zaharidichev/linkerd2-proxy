@@ -5,10 +5,10 @@ pub struct NewServiceFn<T> {
     f: T,
 }
 
-impl<T, N> NewServiceFn<T>
+impl<T, N, R> NewServiceFn<T>
 where
     T: Fn() -> N,
-    N: Service,
+    N: Service<R>,
 {
     pub fn new(f: T) -> Self {
         NewServiceFn {
@@ -17,12 +17,11 @@ where
     }
 }
 
-impl<T, N> NewService for NewServiceFn<T>
+impl<T, N, R> NewService<R> for NewServiceFn<T>
 where
     T: Fn() -> N,
-    N: Service,
+    N: Service<R>,
 {
-    type Request = N::Request;
     type Response = N::Response;
     type Error = N::Error;
     type Service = N;
