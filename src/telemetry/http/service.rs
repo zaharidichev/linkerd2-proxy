@@ -119,7 +119,7 @@ where
     A: Body + 'static,
     B: Body + 'static,
     N: NewService<
-        Request = http::Request<RequestBody<A>>,
+        http::Request<RequestBody<A>>,
         Response = http::Response<B>,
         Error = ClientError,
     >
@@ -139,18 +139,17 @@ where
     }
 }
 
-impl<N, A, B> NewService for NewHttp<N, A, B>
+impl<N, A, B> NewService<http::Request<A>> for NewHttp<N, A, B>
 where
     A: Body + 'static,
     B: Body + 'static,
     N: NewService<
-        Request = http::Request<RequestBody<A>>,
+        http::Request<RequestBody<A>>,
         Response = http::Response<B>,
         Error = ClientError,
     >
         + 'static,
 {
-    type Request = http::Request<A>;
     type Response = http::Response<ResponseBody<B>>;
     type Error = N::Error;
     type InitError = N::InitError;
@@ -175,7 +174,7 @@ where
     B: Body + 'static,
     F: Future,
     F::Item: Service<
-        Request = http::Request<RequestBody<A>>,
+        http::Request<RequestBody<A>>,
         Response = http::Response<B>
     >,
 {
@@ -196,18 +195,17 @@ where
 
 // === Http ===
 
-impl<S, A, B> Service for Http<S, A, B>
+impl<S, A, B> Service<http::Request<A>> for Http<S, A, B>
 where
     A: Body + 'static,
     B: Body + 'static,
     S: Service<
-        Request = http::Request<RequestBody<A>>,
+        http::Request<RequestBody<A>>,
         Response = http::Response<B>,
         Error = ClientError,
     >
         + 'static,
 {
-    type Request = http::Request<A>;
     type Response = http::Response<ResponseBody<B>>;
     type Error = S::Error;
     type Future = Respond<S::Future, B>;
@@ -216,7 +214,7 @@ where
         self.service.poll_ready()
     }
 
-    fn call(&mut self, mut req: Self::Request) -> Self::Future {
+    fn call(&mut self, mut req: http::Request<A>) -> Self::Future {
         let metadata = (
             req.extensions_mut().remove::<Arc<ctx::transport::Server>>(),
             req.extensions_mut().remove::<RequestOpen>()
@@ -631,11 +629,10 @@ impl<S> TimestampRequestOpen<S> {
     }
 }
 
-impl<S, B> Service for TimestampRequestOpen<S>
+impl<S, B> Service<http::Request<B>> for TimestampRequestOpen<S>
 where
-    S: Service<Request = http::Request<B>>,
+    S: Service<http::Request<B>>,
 {
-    type Request = http::Request<B>;
     type Response = S::Response;
     type Error = S::Error;
     type Future = S::Future;
@@ -644,17 +641,16 @@ where
         self.inner.poll_ready()
     }
 
-    fn call(&mut self, mut req: Self::Request) -> Self::Future {
+    fn call(&mut self, mut req: http::Request<B>) -> Self::Future {
         req.extensions_mut().insert(RequestOpen(Instant::now()));
         self.inner.call(req)
     }
 }
 
-impl<S, B> NewService for TimestampRequestOpen<S>
+impl<S, B> NewService<http::Request<B>> for TimestampRequestOpen<S>
 where
-    S: NewService<Request = http::Request<B>>,
+    S: NewService<http::Request<B>>,
 {
-    type Request = S::Request;
     type Response = S::Response;
     type Error = S::Error;
     type InitError = S::InitError;

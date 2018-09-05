@@ -63,7 +63,7 @@ impl Sensors {
         A: Body + 'static,
         B: Body + 'static,
         N: NewService<
-            Request = Request<RequestBody<A>>,
+            Request<RequestBody<A>>,
             Response = Response<B>,
             Error = ClientError
         >
