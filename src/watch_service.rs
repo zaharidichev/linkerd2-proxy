@@ -2,31 +2,30 @@ use futures::{Async, Poll, Stream};
 use futures_watch::Watch;
 use tower_service::Service;
 
-pub trait Rebind<T> {
-    type Service: Service;
+pub trait Rebind<T, R> {
+    type Service: Service<R>;
     fn rebind(&mut self, t: &T) -> Self::Service;
 }
 
 /// A Service that updates itself as a Watch updates.
 #[derive(Debug)]
-pub struct WatchService<T, R: Rebind<T>> {
+pub struct WatchService<T, R: Rebind<T, Q>, Q> {
     watch: Watch<T>,
     rebind: R,
     inner: R::Service,
 }
 
-impl<T, R: Rebind<T>> WatchService<T, R> {
-    pub fn new(watch: Watch<T>, mut rebind: R) -> WatchService<T, R> {
+impl<T, R: Rebind<T, Q>, Q> WatchService<T, R, Q> {
+    pub fn new(watch: Watch<T>, mut rebind: R) -> WatchService<T, R, Q> {
         let inner = rebind.rebind(&*watch.borrow());
         WatchService { watch, rebind, inner }
     }
 }
 
-impl<T, R: Rebind<T>> Service for WatchService<T, R> {
-    type Request = <R::Service as Service>::Request;
-    type Response = <R::Service as Service>::Response;
-    type Error = <R::Service as Service>::Error;
-    type Future = <R::Service as Service>::Future;
+impl<T, R: Rebind<T, Q>, Q> Service<Q> for WatchService<T, R, Q> {
+    type Response = <R::Service as Service<Q>>::Response;
+    type Error = <R::Service as Service<Q>>::Error;
+    type Future = <R::Service as Service<Q>>::Future;
 
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
         // Check to see if the watch has been updated and, if so, rebind the service.
@@ -39,14 +38,14 @@ impl<T, R: Rebind<T>> Service for WatchService<T, R> {
         self.inner.poll_ready()
     }
 
-    fn call(&mut self, req: Self::Request) -> Self::Future {
+    fn call(&mut self, req: Q) -> Self::Future {
         self.inner.call(req)
     }
 }
 
-impl<T, S, F> Rebind<T> for F
+impl<T, S, F, R> Rebind<T, R> for F
 where
-    S: Service,
+    S: Service<R>,
     for<'t> F: FnMut(&'t T) -> S,
 {
     type Service = S;
@@ -68,8 +67,7 @@ mod tests {
     #[test]
     fn rebind() {
         struct Svc(usize);
-        impl Service for Svc {
-            type Request = ();
+        impl Service<()> for Svc {
             type Response = usize;
             type Error = ();
             type Future = future::FutureResult<usize, ()>;
