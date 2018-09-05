@@ -15,10 +15,10 @@ mod cache;
 use self::cache::Cache;
 
 /// Routes requests based on a configurable `Key`.
-pub struct Router<T>
-where T: Recognize,
+pub struct Router<T, R>
+where T: Recognize<R>,
 {
-    inner: Arc<Inner<T>>,
+    inner: Arc<Inner<T, R>>,
 }
 
 /// Provides a strategy for routing a Request to a Service.
@@ -27,9 +27,7 @@ where T: Recognize,
 /// `recognize()` method is used to determine the key for a given request. This key is
 /// used to look up a route in a cache (i.e. in `Router`), or can be passed to
 /// `bind_service` to instantiate the identified route.
-pub trait Recognize {
-    /// Requests handled by the discovered services
-    type Request;
+pub trait Recognize<Request> {
 
     /// Responses given by the discovered services
     type Response;
@@ -44,12 +42,12 @@ pub trait Recognize {
     type RouteError;
 
     /// A route.
-    type Service: Service<Request = Self::Request,
+    type Service: Service<Request,
                          Response = Self::Response,
                             Error = Self::Error>;
 
     /// Determines the key for a route to handle the given request.
-    fn recognize(&self, req: &Self::Request) -> Option<Self::Key>;
+    fn recognize(&self, req: &Request) -> Option<Self::Key>;
 
     /// Return a `Service` to handle requests.
     ///
@@ -66,23 +64,23 @@ pub enum Error<T, U> {
     NotRecognized,
 }
 
-pub struct ResponseFuture<T>
-where T: Recognize,
+pub struct ResponseFuture<T, R>
+where T: Recognize<R>,
 {
-    state: State<T>,
+    state: State<T, R>,
 }
 
-struct Inner<T>
-where T: Recognize,
+struct Inner<T, R>
+where T: Recognize<R>,
 {
     recognize: T,
     cache: Mutex<Cache<T::Key, T::Service>>,
 }
 
-enum State<T>
-where T: Recognize,
+enum State<T, R>
+where T: Recognize<R>,
 {
-    Inner(<T::Service as Service>::Future),
+    Inner(<T::Service as Service<R>>::Future),
     RouteError(T::RouteError),
     NoCapacity(usize),
     NotRecognized,
@@ -91,8 +89,8 @@ where T: Recognize,
 
 // ===== impl Router =====
 
-impl<T> Router<T>
-where T: Recognize
+impl<T, R> Router<T, R>
+where T: Recognize<R>
 {
     pub fn new(recognize: T, capacity: usize, max_idle_age: Duration) -> Self {
         Router {
@@ -104,13 +102,12 @@ where T: Recognize
     }
 }
 
-impl<T> Service for Router<T>
-where T: Recognize,
+impl<T, R> Service<R> for Router<T, R>
+where T: Recognize<R>,
 {
-    type Request = T::Request;
     type Response = T::Response;
     type Error = Error<T::Error, T::RouteError>;
-    type Future = ResponseFuture<T>;
+    type Future = ResponseFuture<T, R>;
 
     /// Always ready to serve.
     ///
@@ -126,7 +123,7 @@ where T: Recognize,
     /// Routes the request through an underlying service.
     ///
     /// The response fails when the request cannot be routed.
-    fn call(&mut self, request: Self::Request) -> Self::Future {
+    fn call(&mut self, request: R) -> Self::Future {
         let key = match self.inner.recognize.recognize(&request) {
             Some(key) => key,
             None => return ResponseFuture::not_recognized(),
@@ -161,8 +158,8 @@ where T: Recognize,
     }
 }
 
-impl<T> Clone for Router<T>
-where T: Recognize,
+impl<T, R> Clone for Router<T, R>
+where T: Recognize<R>,
 {
     fn clone(&self) -> Self {
         Router { inner: self.inner.clone() }
@@ -171,10 +168,10 @@ where T: Recognize,
 
 // ===== impl ResponseFuture =====
 
-impl<T> ResponseFuture<T>
-where T: Recognize,
+impl<T, R> ResponseFuture<T, R>
+where T: Recognize<R>,
 {
-    fn new(inner: <T::Service as Service>::Future) -> Self {
+    fn new(inner: <T::Service as Service<R>>::Future) -> Self {
         ResponseFuture { state: State::Inner(inner) }
     }
 
@@ -187,8 +184,8 @@ where T: Recognize,
     }
 }
 
-impl<T> Future for ResponseFuture<T>
-where T: Recognize,
+impl<T, R> Future for ResponseFuture<T, R>
+where T: Recognize<R>,
 {
     type Item = T::Response;
     type Error = Error<T::Error, T::RouteError>;
@@ -270,15 +267,14 @@ mod test_util {
 
     // ===== impl Recognize =====
 
-    impl super::Recognize for Recognize {
-        type Request = Request;
+    impl super::Recognize<Request> for Recognize {
         type Response = usize;
         type Error = ();
         type Key = usize;
         type RouteError = ();
         type Service = MultiplyAndAssign;
 
-        fn recognize(&self, req: &Self::Request) -> Option<Self::Key> {
+        fn recognize(&self, req: &Request) -> Option<Self::Key> {
             match *req {
                 Request::NotRecognized => None,
                 Request::Recognized(n) => Some(n),
@@ -298,8 +294,7 @@ mod test_util {
         }
     }
 
-    impl Service for MultiplyAndAssign {
-        type Request = Request;
+    impl Service<Request> for MultiplyAndAssign {
         type Response = usize;
         type Error = ();
         type Future = future::FutureResult<usize, ()>;
@@ -308,7 +303,7 @@ mod test_util {
             unimplemented!()
         }
 
-        fn call(&mut self, req: Self::Request) -> Self::Future {
+        fn call(&mut self, req: Request) -> Self::Future {
             let n = match req {
                 Request::NotRecognized => unreachable!(),
                 Request::Recognized(n) => n,
@@ -333,7 +328,7 @@ mod tests {
     use tower_service::Service;
     use super::{Error, Router};
 
-    impl Router<Recognize> {
+    impl Router<Recognize, Request> {
         fn call_ok(&mut self, req: Request) -> usize {
             self.call(req).wait().expect("should route")
         }
