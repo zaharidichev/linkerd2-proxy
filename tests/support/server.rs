@@ -322,8 +322,7 @@ impl Svc {
     }
 }
 
-impl Service for Svc {
-    type Request = Request<RecvBody>;
+impl Service<Request<RecvBody>> for Svc {
     type Response = Response<RspBody>;
     type Error = h2::Error;
     type Future = Box<Future<Item=Self::Response, Error=Self::Error> + Send>;
@@ -332,7 +331,7 @@ impl Service for Svc {
         Ok(Async::Ready(()))
     }
 
-    fn call(&mut self, req: Self::Request) -> Self::Future {
+    fn call(&mut self, req: Request<RecvBody>) -> Self::Future {
         let req = req.map(|body| {
             assert!(body.is_end_stream(), "h2 test server doesn't support request bodies yet");
             Box::new(futures::stream::empty()) as ReqBody
@@ -373,8 +372,7 @@ impl hyper::service::Service for Svc {
 #[derive(Debug)]
 struct NewSvc(Arc<HashMap<String, Route>>);
 
-impl NewService for NewSvc {
-    type Request = Request<RecvBody>;
+impl NewService<Request<RecvBody>> for NewSvc {
     type Response = Response<RspBody>;
     type Error = h2::Error;
     type InitError = ::std::io::Error;
