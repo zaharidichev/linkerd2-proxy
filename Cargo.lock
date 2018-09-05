@@ -500,7 +500,7 @@ dependencies = [
  "ipnet 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "linkerd2-metrics 0.1.0",
- "linkerd2-proxy-api 0.1.1 (git+https://github.com/linkerd/linkerd2-proxy-api?tag=v0.1.1)",
+ "linkerd2-proxy-api 0.1.0 (git+https://github.com/linkerd/linkerd2-proxy-api?branch=eliza/generic-service)",
  "linkerd2-proxy-router 0.1.0",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "net2 0.2.32 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -519,17 +519,17 @@ dependencies = [
  "tokio-rustls 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-signal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-add-origin 0.1.0 (git+https://github.com/tower-rs/tower-http)",
- "tower-balance 0.1.0 (git+https://github.com/tower-rs/tower)",
- "tower-buffer 0.1.0 (git+https://github.com/tower-rs/tower)",
- "tower-discover 0.1.0 (git+https://github.com/tower-rs/tower)",
- "tower-grpc 0.1.0 (git+https://github.com/tower-rs/tower-grpc)",
- "tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2)",
- "tower-h2-balance 0.1.0 (git+https://github.com/tower-rs/tower-h2)",
- "tower-in-flight-limit 0.1.0 (git+https://github.com/tower-rs/tower)",
- "tower-reconnect 0.1.0 (git+https://github.com/tower-rs/tower)",
- "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
- "tower-util 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-add-origin 0.1.0 (git+https://github.com/tower-rs/tower-http?branch=eliza/generic-service)",
+ "tower-balance 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+ "tower-buffer 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+ "tower-discover 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+ "tower-grpc 0.1.0 (git+https://github.com/tower-rs/tower-grpc?branch=eliza/generic-service)",
+ "tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service)",
+ "tower-h2-balance 0.1.0 (git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service)",
+ "tower-in-flight-limit 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+ "tower-reconnect 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+ "tower-util 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
  "trust-dns-resolver 0.9.0 (git+https://github.com/bluejekyll/trust-dns)",
  "try-lock 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "untrusted 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -538,8 +538,8 @@ dependencies = [
 
 [[package]]
 name = "linkerd2-proxy-api"
-version = "0.1.1"
-source = "git+https://github.com/linkerd/linkerd2-proxy-api?tag=v0.1.1#b0543809839fd0e6bc7cb8e4a644ce48df88b27d"
+version = "0.1.0"
+source = "git+https://github.com/linkerd/linkerd2-proxy-api?branch=eliza/generic-service#b639b0d0c4dcc8427bb731613379efa6ef680b2d"
 dependencies = [
  "bytes 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -549,9 +549,9 @@ dependencies = [
  "prost-derive 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "prost-types 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "quickcheck 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-grpc 0.1.0 (git+https://github.com/tower-rs/tower-grpc)",
- "tower-grpc-build 0.1.0 (git+https://github.com/tower-rs/tower-grpc)",
- "tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2)",
+ "tower-grpc 0.1.0 (git+https://github.com/tower-rs/tower-grpc?branch=eliza/generic-service)",
+ "tower-grpc-build 0.1.0 (git+https://github.com/tower-rs/tower-grpc?branch=eliza/generic-service)",
+ "tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service)",
 ]
 
 [[package]]
@@ -1235,11 +1235,25 @@ dependencies = [
 [[package]]
 name = "tower-add-origin"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower-http#c9e13f641a681b3ef01e96910789586e39aee2e2"
+source = "git+https://github.com/tower-rs/tower-http?branch=eliza/generic-service#c7cd0ffe4353bf1601f159ade696f238f291bf88"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "http 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+]
+
+[[package]]
+name = "tower-balance"
+version = "0.1.0"
+source = "git+https://github.com/tower-rs/tower?branch=eliza/generic-service#ab8a52857d4fd2b4b6f59c7e99510f99b2d9aad8"
+dependencies = [
+ "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
+ "indexmap 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-timer 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tower-discover 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
 ]
 
 [[package]]
@@ -1259,10 +1273,19 @@ dependencies = [
 [[package]]
 name = "tower-buffer"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower#679dcbe3272785277081acd4b6671e2bf69fcc52"
+source = "git+https://github.com/tower-rs/tower?branch=eliza/generic-service#ab8a52857d4fd2b4b6f59c7e99510f99b2d9aad8"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+]
+
+[[package]]
+name = "tower-discover"
+version = "0.1.0"
+source = "git+https://github.com/tower-rs/tower?branch=eliza/generic-service#ab8a52857d4fd2b4b6f59c7e99510f99b2d9aad8"
+dependencies = [
+ "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
 ]
 
 [[package]]
@@ -1277,7 +1300,7 @@ dependencies = [
 [[package]]
 name = "tower-grpc"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower-grpc#0afac3d409febe20db4432b5abe06dbd72bd4c95"
+source = "git+https://github.com/tower-rs/tower-grpc?branch=eliza/generic-service#31ace5d078294399d18a1eb1f71e15c2ed8a1e40"
 dependencies = [
  "bytes 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1285,14 +1308,14 @@ dependencies = [
  "http 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "prost 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2)",
- "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
 ]
 
 [[package]]
 name = "tower-grpc-build"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower-grpc#0afac3d409febe20db4432b5abe06dbd72bd4c95"
+source = "git+https://github.com/tower-rs/tower-grpc?branch=eliza/generic-service#31ace5d078294399d18a1eb1f71e15c2ed8a1e40"
 dependencies = [
  "codegen 0.1.0 (git+https://github.com/carllerche/codegen)",
  "heck 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1302,7 +1325,7 @@ dependencies = [
 [[package]]
 name = "tower-h2"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower-h2#1299be66fee7be919699d7c1edfb30adac03d4c1"
+source = "git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service#28c601909f5268d7fc042184a08f254e661e7c4a"
 dependencies = [
  "bytes 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1311,39 +1334,47 @@ dependencies = [
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-connect 0.1.0 (git+https://github.com/carllerche/tokio-connect)",
  "tokio-io 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
 ]
 
 [[package]]
 name = "tower-h2-balance"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower-h2#760f9fc1c83c3a96edb6fbddb6b0cd3cac73d8ac"
+source = "git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service#28c601909f5268d7fc042184a08f254e661e7c4a"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "h2 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "http 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-balance 0.1.0 (git+https://github.com/tower-rs/tower)",
- "tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2)",
+ "tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service)",
  "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
 ]
 
 [[package]]
 name = "tower-in-flight-limit"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower#679dcbe3272785277081acd4b6671e2bf69fcc52"
+source = "git+https://github.com/tower-rs/tower?branch=eliza/generic-service#ab8a52857d4fd2b4b6f59c7e99510f99b2d9aad8"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
 ]
 
 [[package]]
 name = "tower-reconnect"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower#679dcbe3272785277081acd4b6671e2bf69fcc52"
+source = "git+https://github.com/tower-rs/tower?branch=eliza/generic-service#ab8a52857d4fd2b4b6f59c7e99510f99b2d9aad8"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
+]
+
+[[package]]
+name = "tower-service"
+version = "0.1.0"
+source = "git+https://github.com/tower-rs/tower?branch=eliza/generic-service#ab8a52857d4fd2b4b6f59c7e99510f99b2d9aad8"
+dependencies = [
+ "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1357,10 +1388,10 @@ dependencies = [
 [[package]]
 name = "tower-util"
 version = "0.1.0"
-source = "git+https://github.com/tower-rs/tower#679dcbe3272785277081acd4b6671e2bf69fcc52"
+source = "git+https://github.com/tower-rs/tower?branch=eliza/generic-service#ab8a52857d4fd2b4b6f59c7e99510f99b2d9aad8"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
- "tower-service 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)",
 ]
 
 [[package]]
@@ -1627,7 +1658,7 @@ dependencies = [
 "checksum lazycell 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a6f08839bc70ef4a3fe1d566d5350f519c5912ea86be0df1740a7d247c7fc0ef"
 "checksum libc 0.2.40 (registry+https://github.com/rust-lang/crates.io-index)" = "6fd41f331ac7c5b8ac259b8bf82c75c0fb2e469bbf37d2becbba9a6a2221965b"
 "checksum linked-hash-map 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7860ec297f7008ff7a1e3382d7f7e1dcd69efc94751a2284bafc3d013c2aa939"
-"checksum linkerd2-proxy-api 0.1.1 (git+https://github.com/linkerd/linkerd2-proxy-api?tag=v0.1.1)" = "<none>"
+"checksum linkerd2-proxy-api 0.1.0 (git+https://github.com/linkerd/linkerd2-proxy-api?branch=eliza/generic-service)" = "<none>"
 "checksum log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "89f010e843f2b1a31dbd316b3b8d443758bc634bed37aabade59c686d644e0a2"
 "checksum lru-cache 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4d06ff7ff06f729ce5f4e227876cb88d10bc59cd4ae1e09fbb2bde15c850dc21"
 "checksum matches 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "100aabe6b8ff4e4a7e32c1c13523379802df0772b82466207ac25b013f193376"
@@ -1703,18 +1734,21 @@ dependencies = [
 "checksum tokio-threadpool 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "b3c3873a6d8d0b636e024e77b9a82eaab6739578a06189ecd0e731c7308fbc5d"
 "checksum tokio-timer 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "028b94314065b90f026a21826cffd62a4e40a92cda3e5c069cc7b02e5945f5e9"
 "checksum tokio-udp 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "137bda266504893ac4774e0ec4c2108f7ccdbcb7ac8dced6305fe9e4e0b5041a"
-"checksum tower-add-origin 0.1.0 (git+https://github.com/tower-rs/tower-http)" = "<none>"
+"checksum tower-add-origin 0.1.0 (git+https://github.com/tower-rs/tower-http?branch=eliza/generic-service)" = "<none>"
 "checksum tower-balance 0.1.0 (git+https://github.com/tower-rs/tower)" = "<none>"
-"checksum tower-buffer 0.1.0 (git+https://github.com/tower-rs/tower)" = "<none>"
+"checksum tower-balance 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)" = "<none>"
+"checksum tower-buffer 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)" = "<none>"
 "checksum tower-discover 0.1.0 (git+https://github.com/tower-rs/tower)" = "<none>"
-"checksum tower-grpc 0.1.0 (git+https://github.com/tower-rs/tower-grpc)" = "<none>"
-"checksum tower-grpc-build 0.1.0 (git+https://github.com/tower-rs/tower-grpc)" = "<none>"
-"checksum tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2)" = "<none>"
-"checksum tower-h2-balance 0.1.0 (git+https://github.com/tower-rs/tower-h2)" = "<none>"
-"checksum tower-in-flight-limit 0.1.0 (git+https://github.com/tower-rs/tower)" = "<none>"
-"checksum tower-reconnect 0.1.0 (git+https://github.com/tower-rs/tower)" = "<none>"
+"checksum tower-discover 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)" = "<none>"
+"checksum tower-grpc 0.1.0 (git+https://github.com/tower-rs/tower-grpc?branch=eliza/generic-service)" = "<none>"
+"checksum tower-grpc-build 0.1.0 (git+https://github.com/tower-rs/tower-grpc?branch=eliza/generic-service)" = "<none>"
+"checksum tower-h2 0.1.0 (git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service)" = "<none>"
+"checksum tower-h2-balance 0.1.0 (git+https://github.com/tower-rs/tower-h2?branch=eliza/generic-service)" = "<none>"
+"checksum tower-in-flight-limit 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)" = "<none>"
+"checksum tower-reconnect 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)" = "<none>"
 "checksum tower-service 0.1.0 (git+https://github.com/tower-rs/tower)" = "<none>"
-"checksum tower-util 0.1.0 (git+https://github.com/tower-rs/tower)" = "<none>"
+"checksum tower-service 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)" = "<none>"
+"checksum tower-util 0.1.0 (git+https://github.com/tower-rs/tower?branch=eliza/generic-service)" = "<none>"
 "checksum trust-dns-proto 0.4.0 (git+https://github.com/bluejekyll/trust-dns)" = "<none>"
 "checksum trust-dns-resolver 0.9.0 (git+https://github.com/bluejekyll/trust-dns)" = "<none>"
 "checksum try-lock 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "119b532a17fbe772d360be65617310164549a07c25a1deab04c84168ce0d4545"

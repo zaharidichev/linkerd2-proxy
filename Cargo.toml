@@ -22,7 +22,7 @@ futures-mpsc-lossy    = { path = "./futures-mpsc-lossy" }
 linkerd2-metrics      = { path = "./metrics" }
 linkerd2-proxy-router = { path = "./router" }
 
-linkerd2-proxy-api = { git = "https://github.com/linkerd/linkerd2-proxy-api", tag = "v0.1.1", version = "0.1.1" }
+linkerd2-proxy-api = { git = "https://github.com/linkerd/linkerd2-proxy-api", branch = "eliza/generic-service" }
 
 bytes = "0.4"
 env_logger = { version = "0.5", default-features = false }
@@ -48,17 +48,17 @@ tokio = "0.1.7"
 tokio-signal = "0.2"
 tokio-timer = "0.2.4"   # for tokio_timer::clock
 tokio-connect         = { git = "https://github.com/carllerche/tokio-connect" }
-tower-add-origin      = { git = "https://github.com/tower-rs/tower-http" }
-tower-balance         = { git = "https://github.com/tower-rs/tower" }
-tower-buffer          = { git = "https://github.com/tower-rs/tower" }
-tower-discover        = { git = "https://github.com/tower-rs/tower" }
-tower-in-flight-limit = { git = "https://github.com/tower-rs/tower" }
-tower-reconnect       = { git = "https://github.com/tower-rs/tower" }
-tower-service         = { git = "https://github.com/tower-rs/tower" }
-tower-util            = { git = "https://github.com/tower-rs/tower" }
-tower-h2              = { git = "https://github.com/tower-rs/tower-h2" }
-tower-h2-balance      = { git = "https://github.com/tower-rs/tower-h2" }
-tower-grpc            = { git = "https://github.com/tower-rs/tower-grpc" }
+tower-add-origin      = { git = "https://github.com/tower-rs/tower-http", branch = "eliza/generic-service" }
+tower-balance         = { git = "https://github.com/tower-rs/tower", branch = "eliza/generic-service" }
+tower-buffer          = { git = "https://github.com/tower-rs/tower", branch = "eliza/generic-service" }
+tower-discover        = { git = "https://github.com/tower-rs/tower", branch = "eliza/generic-service" }
+tower-in-flight-limit = { git = "https://github.com/tower-rs/tower", branch = "eliza/generic-service" }
+tower-reconnect       = { git = "https://github.com/tower-rs/tower", branch = "eliza/generic-service" }
+tower-service         = { git = "https://github.com/tower-rs/tower", branch = "eliza/generic-service" }
+tower-util            = { git = "https://github.com/tower-rs/tower", branch = "eliza/generic-service" }
+tower-h2-balance      = { git = "https://github.com/tower-rs/tower-h2", branch = "eliza/generic-service" }
+tower-h2              = { git = "https://github.com/tower-rs/tower-h2", branch = "eliza/generic-service" }
+tower-grpc            = { git = "https://github.com/tower-rs/tower-grpc", branch = "eliza/generic-service" }
 
 # dns
 trust-dns-resolver = { default-features = false, git = "https://github.com/bluejekyll/trust-dns" }
@@ -79,7 +79,7 @@ procinfo = "0.4.2"
 net2 = "0.2"
 quickcheck = { version = "0.6", default-features = false }
 linkerd2-metrics = { path = "./metrics", features = ["test_util"] }
-linkerd2-proxy-api = { git = "https://github.com/linkerd/linkerd2-proxy-api", tag = "v0.1.1", version = "0.1.1", features = ["arbitrary"] }
+linkerd2-proxy-api = { git = "https://github.com/linkerd/linkerd2-proxy-api", branch = "eliza/generic-service", features = ["arbitrary"] }
 flate2 = { version = "1.0.1", default-features = false, features = ["rust_backend"] }
 # `tokio-io` is needed for TCP tests, because `tokio::io` doesn't re-export
 # the `read` function.
