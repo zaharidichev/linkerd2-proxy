@@ -240,7 +240,7 @@ impl<S, E> HyperServerSvc<S, E> {
 impl<S, E, B> hyper::service::Service for HyperServerSvc<S, E>
 where
     S: Service<
-        Request=http::Request<HttpBody>,
+        http::Request<HttpBody>,
         Response=http::Response<B>,
     >,
     S::Error: Error + Send + Sync + 'static,
@@ -323,13 +323,10 @@ where
 // ==== impl HttpBodySvc ====
 
 
-impl<S> Service for HttpBodySvc<S>
+impl<S> Service<http::Request<tower_h2::RecvBody>> for HttpBodySvc<S>
 where
-    S: Service<
-        Request=http::Request<HttpBody>,
-    >,
+    S: Service<http::Request<HttpBody>>,
 {
-    type Request = http::Request<tower_h2::RecvBody>;
     type Response = S::Response;
     type Error = S::Error;
     type Future = S::Future;
@@ -338,14 +335,14 @@ where
         self.service.poll_ready()
     }
 
-    fn call(&mut self, req: Self::Request) -> Self::Future {
+    fn call(&mut self, req: http::Request<tower_h2::RecvBody>) -> Self::Future {
         self.service.call(req.map(|b| HttpBody::Http2(b)))
     }
 }
 
 impl<N> HttpBodyNewSvc<N>
 where
-    N: NewService<Request=http::Request<HttpBody>>,
+    N: NewService<http::Request<HttpBody>>,
 {
     pub fn new(new_service: N) -> Self {
         HttpBodyNewSvc {
@@ -354,11 +351,10 @@ where
     }
 }
 
-impl<N> NewService for HttpBodyNewSvc<N>
+impl<N> NewService<http::Request<tower_h2::RecvBody>> for HttpBodyNewSvc<N>
 where
-    N: NewService<Request=http::Request<HttpBody>>,
+    N: NewService<http::Request<HttpBody>>,
 {
-    type Request = http::Request<tower_h2::RecvBody>;
     type Response = N::Response;
     type Error = N::Error;
     type Service = HttpBodySvc<N::Service>;

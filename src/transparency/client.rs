@@ -143,7 +143,7 @@ where
     }
 }
 
-impl<C, E, B> NewService for Client<C, E, B>
+impl<C, E, B> NewService<bind::HttpRequest<B>> for Client<C, E, B>
 where
     C: Connect + Clone + Send + Sync + 'static,
     C::Future: Send + 'static,
@@ -154,7 +154,6 @@ where
     B: tower_h2::Body + Send + 'static,
    <B::Data as IntoBuf>::Buf: Send + 'static,
 {
-    type Request = bind::HttpRequest<B>;
     type Response = http::Response<HttpBody>;
     type Error = Error;
     type InitError = tower_h2::client::ConnectError<C::Error>;
@@ -205,7 +204,7 @@ where
     }
 }
 
-impl<C, E, B> Service for ClientService<C, E, B>
+impl<C, E, B> Service<bind::HttpRequest<B>> for ClientService<C, E, B>
 where
     C: Connect + Send + Sync + 'static,
     C::Connected: Send,
@@ -216,7 +215,6 @@ where
     B: tower_h2::Body + Send + 'static,
    <B::Data as IntoBuf>::Buf: Send + 'static,
 {
-    type Request = bind::HttpRequest<B>;
     type Response = http::Response<HttpBody>;
     type Error = Error;
     type Future = ClientServiceFuture;
@@ -228,7 +226,7 @@ where
         }
     }
 
-    fn call(&mut self, req: Self::Request) -> Self::Future {
+    fn call(&mut self, req: bind::HttpRequest<B>) -> Self::Future {
         debug!("client request: method={} uri={} version={:?} headers={:?}",
             req.method(), req.uri(), req.version(), req.headers());
         match self.inner {

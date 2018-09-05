@@ -53,11 +53,10 @@ impl<S> Upgrade<S> {
     }
 }
 
-impl<S, B1, B2> Service for Upgrade<S>
+impl<S, B1, B2> Service<http::Request<B1>> for Upgrade<S>
 where
-    S: Service<Request = http::Request<B1>, Response = http::Response<B2>>,
+    S: Service<http::Request<B1>, Response = http::Response<B2>>,
 {
-    type Request = S::Request;
     type Response = S::Response;
     type Error = S::Error;
     type Future = future::Map<
@@ -69,7 +68,7 @@ where
         self.inner.poll_ready()
     }
 
-    fn call(&mut self, mut req: Self::Request) -> Self::Future {
+    fn call(&mut self, mut req: http::Request<B1>) -> Self::Future {
         let mut downgrade_response = false;
 
         if self.upgrade_h1 && req.version() != http::Version::HTTP_2 {
@@ -133,11 +132,10 @@ where
     }
 }
 
-impl<S, B1, B2> NewService for Upgrade<S>
+impl<S, B1, B2> NewService<http::Request<B1>> for Upgrade<S>
 where
-    S: NewService<Request = http::Request<B1>, Response = http::Response<B2>>,
+    S: NewService<http::Request<B1>, Response = http::Response<B2>>,
 {
-    type Request = S::Request;
     type Response = S::Response;
     type Error = S::Error;
     type Service = Upgrade<S::Service>;
@@ -170,11 +168,10 @@ impl<S> Downgrade<S> {
     }
 }
 
-impl<S, B1, B2> Service for Downgrade<S>
+impl<S, B1, B2> Service<http::Request<B1>> for Downgrade<S>
 where
-    S: Service<Request = http::Request<B1>, Response = http::Response<B2>>,
+    S: Service<http::Request<B1>, Response = http::Response<B2>>,
 {
-    type Request = S::Request;
     type Response = S::Response;
     type Error = S::Error;
     type Future = future::Map<
@@ -186,7 +183,7 @@ where
         self.inner.poll_ready()
     }
 
-    fn call(&mut self, mut req: Self::Request) -> Self::Future {
+    fn call(&mut self, mut req: http::Request<B1>) -> Self::Future {
         let mut upgrade_response = false;
 
         if req.version() == http::Version::HTTP_2 {
