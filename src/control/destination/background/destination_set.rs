@@ -31,7 +31,7 @@ use conditional::Conditional;
 use super::{ActiveQuery, DestinationServiceQuery, UpdateRx};
 
 /// Holds the state of a single resolution.
-pub(super) struct DestinationSet<T: HttpService<ResponseBody = RecvBody>> {
+pub(super) struct DestinationSet<T: HttpService<BoxBody, ResponseBody = RecvBody>> {
     pub addrs: Exists<Cache<SocketAddr, Metadata>>,
     pub query: DestinationServiceQuery<T>,
     pub dns_query: Option<IpAddrListFuture>,
@@ -42,7 +42,7 @@ pub(super) struct DestinationSet<T: HttpService<ResponseBody = RecvBody>> {
 
 impl<T> DestinationSet<T>
 where
-    T: HttpService<RequestBody = BoxBody, ResponseBody = RecvBody>,
+    T: HttpService<BoxBody, ResponseBody = RecvBody>,
     T::Error: fmt::Debug,
 {
     pub(super) fn reset_dns_query(
@@ -179,7 +179,7 @@ where
     }
 }
 
-impl<T: HttpService<ResponseBody = RecvBody>> DestinationSet<T> {
+impl<T: HttpService<BoxBody, ResponseBody = RecvBody>> DestinationSet<T> {
 
     /// Returns `true` if the authority that created this query _should_ query
     /// the Destination service, but was unable to due to insufficient capaacity.

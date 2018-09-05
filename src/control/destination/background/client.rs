@@ -35,8 +35,9 @@ pub(super) struct ClientService(AddOrigin<Backoff<LogErrors<Reconnect<
                 >
             >,
             BoxBody,
-        >
-    >>>>);
+        >, http::Request<BoxBody>
+    >
+>>>);
 
 /// The state needed to bind a new controller client stack.
 pub(super) struct BindClient {
@@ -79,8 +80,7 @@ type LogError = ReconnectError<
 
 // ===== impl ClientService =====
 
-impl Service for ClientService {
-    type Request = http::Request<BoxBody>;
+impl Service<http::Request<BoxBody>> for ClientService {
     type Response = http::Response<RecvBody>;
     type Error = LogError;
     type Future = ReconnectFuture<
@@ -91,13 +91,17 @@ impl Service for ClientService {
                     &'static str,
                     HostAndPort,
                 >
-            >, BoxBody>>;
+            >,
+            BoxBody,
+        >,
+        http::Request<BoxBody>,
+    >;
 
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
         self.0.poll_ready()
     }
 
-    fn call(&mut self, request: Self::Request) -> Self::Future {
+    fn call(&mut self, request: http::Request<BoxBody>) -> Self::Future {
         self.0.call(request)
     }
 }
@@ -122,7 +126,7 @@ impl BindClient {
     }
 }
 
-impl Rebind<tls::ConditionalClientConfig> for BindClient {
+impl Rebind<tls::ConditionalClientConfig, http::Request<BoxBody>> for BindClient {
     type Service = ClientService;
     fn rebind(
         &mut self,
@@ -162,9 +166,9 @@ impl Rebind<tls::ConditionalClientConfig> for BindClient {
 
 // ===== impl Backoff =====
 
-impl<S> Backoff<S>
+impl<S, R> Backoff<S>
 where
-    S: Service,
+    S: Service<R>,
 {
     fn new(inner: S, wait_dur: Duration) -> Self {
         Backoff {
@@ -190,12 +194,11 @@ where
     }
 }
 
-impl<S> Service for Backoff<S>
+impl<S, R> Service<R> for Backoff<S>
 where
-    S: Service,
+    S: Service<R>,
     S::Error: fmt::Debug,
 {
-    type Request = S::Request;
     type Response = S::Response;
     type Error = S::Error;
     type Future = S::Future;
@@ -216,7 +219,7 @@ where
         }
     }
 
-    fn call(&mut self, req: Self::Request) -> Self::Future {
+    fn call(&mut self, req: R) -> Self::Future {
         self.inner.call(req)
     }
 }
@@ -224,9 +227,9 @@ where
 
 // ===== impl LogErrors =====
 
-impl<S> LogErrors<S>
+impl<S, R> LogErrors<S>
 where
-    S: Service<Error=LogError>,
+    S: Service<R, Error=LogError>,
 {
     fn new(service: S) -> Self {
         LogErrors {
@@ -235,11 +238,10 @@ where
     }
 }
 
-impl<S> Service for LogErrors<S>
+impl<S, R> Service<R> for LogErrors<S>
 where
-    S: Service<Error=LogError>,
+    S: Service<R, Error=LogError>,
 {
-    type Request = S::Request;
     type Response = S::Response;
     type Error = S::Error;
     type Future = S::Future;
@@ -251,7 +253,7 @@ where
         })
     }
 
-    fn call(&mut self, req: Self::Request) -> Self::Future {
+    fn call(&mut self, req: R) -> Self::Future {
         self.inner.call(req)
     }
 }
@@ -288,8 +290,7 @@ mod tests {
         succeed_after: usize,
     }
 
-    impl Service for MockService {
-        type Request = ();
+    impl Service<()> for MockService {
         type Response = ();
         type Error = ();
         type Future = future::FutureResult<(), ()>;

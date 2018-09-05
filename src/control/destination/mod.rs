@@ -156,9 +156,9 @@ pub fn new(
 
 impl Resolver {
     /// Start watching for address changes for a certain authority.
-    pub fn resolve<N>(&self, authority: &DnsNameAndPort, new_endpoint: N) -> Resolution<N>
+    pub fn resolve<N, R>(&self, authority: &DnsNameAndPort, new_endpoint: N) -> Resolution<N>
     where
-        N: NewClient,
+        N: NewClient<R>,
     {
         trace!("resolve; authority={:?}", authority);
         let (update_tx, update_rx) = mpsc::unbounded();
@@ -187,14 +187,13 @@ impl Resolver {
 
 // ==== impl Resolution =====
 
-impl<N> Discover for Resolution<N>
+impl<N, R> Discover<R> for Resolution<N>
 where
-    N: NewClient<Target = Endpoint>,
+    N: NewClient<R, Target = Endpoint>,
 {
     type Key = SocketAddr;
-    type Request = <N::Client as Service>::Request;
-    type Response = <N::Client as Service>::Response;
-    type Error = <N::Client as Service>::Error;
+    type Response = <N::Client as Service<R>>::Response;
+    type Error = <N::Client as Service<R>>::Error;
     type Service = N::Client;
     type DiscoverError = ();
 

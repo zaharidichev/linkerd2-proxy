@@ -16,10 +16,10 @@ use tower_grpc::{
 ///
 /// A remote may hold a `Receiver` that can be used to read `M`-typed messages from the
 /// remote stream.
-pub enum Remote<M, S: HttpService> {
+pub enum Remote<M, S: HttpService<R>, R> {
     NeedsReconnect,
     ConnectedOrConnecting {
-        rx: Receiver<M, S>,
+        rx: Receiver<M, S, R>,
     },
 }
 
@@ -28,23 +28,25 @@ pub enum Remote<M, S: HttpService> {
 /// Streaming gRPC endpoints return a `ResponseFuture` whose item is a `Response<Stream>`.
 /// A `Receiver` holds the state of that RPC call, exposing a `Stream` that drives both
 /// the gRPC response and its streaming body.
-pub struct Receiver<M, S: HttpService> {
-    rx: Rx<M, S>,
+pub struct Receiver<M, S: HttpService<R>, R> {
+    rx: Rx<M, S, R>,
 
     /// Used by `background::NewQuery` for counting the number of currently
     /// active queries that it has created.
     _active: Weak<()>,
 }
 
-enum Rx<M, S: HttpService> {
+enum Rx<M, S: HttpService<R>, R> {
     Waiting(ResponseFuture<M, S::Future>),
     Streaming(Streaming<M, S::ResponseBody>),
 }
 
 // ===== impl Receiver =====
 
-impl<M: Message + Default, S: HttpService> Receiver<M, S>
+impl<M, S, R> Receiver<M, S, R>
 where
+    M: Message + Default,
+    S: HttpService<R>,
     S::ResponseBody: Body<Data = Data>,
     S::Error: fmt::Debug,
 {
@@ -72,8 +74,10 @@ where
     }
 }
 
-impl<M: Message + Default, S: HttpService> Stream for Receiver<M, S>
+impl<M, S, R> Stream for Receiver<M, S, R>
 where
+    M: Message + Default,
+    S: HttpService<R>,
     S::ResponseBody: Body<Data = Data>,
     S::Error: fmt::Debug,
 {
