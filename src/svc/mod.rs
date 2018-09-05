@@ -23,7 +23,7 @@
 
 pub use tower_service::Service;
 
-pub trait NewClient {
+pub trait NewClient<R> {
 
     /// Describes a resource to which the client will be attached.
     ///
@@ -45,7 +45,7 @@ pub trait NewClient {
     /// `Service::call` must not be called until `Service::poll_ready` returns
     /// `Async::Ready`. When `Service::poll_ready` returns an error, the
     /// client must be discarded.
-    type Client: Service;
+    type Client: Service<R>;
 
     /// Creates a client
     ///

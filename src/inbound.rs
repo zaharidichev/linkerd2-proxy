@@ -44,23 +44,22 @@ where
     }
 }
 
-impl<B> Recognize for Inbound<B>
+impl<B> Recognize<http::Request<B>> for Inbound<B>
 where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,
 {
-    type Request = http::Request<B>;
     type Response = bind::HttpResponse;
     type Error = tower_in_flight_limit::Error<
         tower_buffer::Error<
-            <bind::Service<B> as tower::Service>::Error
+            <bind::Service<B> as tower::Service<http::Request<B>>>::Error
         >
     >;
     type Key = (SocketAddr, bind::Protocol);
     type RouteError = bind::BufferSpawnError;
-    type Service = InFlightLimit<Buffer<orig_proto::Downgrade<bind::Service<B>>>>;
+    type Service = InFlightLimit<Buffer<orig_proto::Downgrade<bind::Service<B>>, http::Request<B>>>;
 
-    fn recognize(&self, req: &Self::Request) -> Option<Self::Key> {
+    fn recognize(&self, req: &http::Request<B>) -> Option<Self::Key> {
         let key = req.extensions()
             .get::<Arc<ctx::transport::Server>>()
             .and_then(|ctx| {

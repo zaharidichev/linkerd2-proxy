@@ -305,7 +305,7 @@ where
         // Setup the public listener. This will listen on a publicly accessible
         // address and listen for inbound connections that should be forwarded
         // to the managed application (private destination).
-        let inbound = {
+        let inbound: drain::Watching<_, _> = {
             let ctx = ctx::Proxy::Inbound;
             let bind = bind.clone().with_ctx(ctx);
             let default_addr = config.private_forward.map(|a| a.into());
@@ -315,6 +315,7 @@ where
                 config.inbound_router_capacity,
                 config.inbound_router_max_idle_age,
             );
+
             serve(
                 inbound_listener,
                 router,
@@ -406,7 +407,7 @@ where
 
 fn serve<R, B, E, F, G>(
     bound_port: BoundPort,
-    router: Router<R>,
+    router: Router<R, http::Request<HttpBody>>,
     tcp_connect_timeout: Duration,
     disable_protocol_detection_ports: IndexSet<u16>,
     proxy_ctx: ctx::Proxy,
@@ -421,7 +422,7 @@ where
     E: Error + Send + 'static,
     F: Error + Send + 'static,
     R: Recognize<
-        Request = http::Request<HttpBody>,
+        http::Request<HttpBody>,
         Response = http::Response<B>,
         Error = E,
         RouteError = F,
@@ -429,8 +430,8 @@ where
         + Send + Sync + 'static,
     R::Key: Send,
     R::Service: Send,
-    <R::Service as tower_service::Service>::Future: Send,
-    Router<R>: Send,
+    <R::Service as tower_service::Service<http::Request<HttpBody>>>::Future: Send,
+    Router<R, http::Request<HttpBody>>: Send,
     G: GetOriginalDst + Send + 'static,
 {
     let stack = Arc::new(NewServiceFn::new(move || {
@@ -540,7 +541,7 @@ where
     B: tower_h2::Body + Send + 'static,
     <B::Data as bytes::IntoBuf>::Buf: Send,
     N: NewService<
-        Request = http::Request<tower_h2::RecvBody>,
+        http::Request<tower_h2::RecvBody>,
         Response = http::Response<B>
     >
         + Send + 'static,

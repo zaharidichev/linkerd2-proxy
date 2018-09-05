@@ -134,27 +134,26 @@ where
     }
 }
 
-impl<B> Recognize for Outbound<B>
+impl<B> Recognize<http::Request<B>> for Outbound<B>
 where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,
 {
-    type Request = http::Request<B>;
     type Response = http::Response<PendingUntilFirstDataBody<
         load::peak_ewma::Handle,
         SensorBody<HttpBody>,
     >>;
-    type Error = <Self::Service as tower::Service>::Error;
+    type Error = <Self::Service as tower::Service<http::Request<B>>>::Error;
     type Key = (Destination, Protocol);
     type RouteError = bind::BufferSpawnError;
     type Service = InFlightLimit<Timeout<Buffer<Balance<
         load::WithPeakEwma<Discovery<B>, PendingUntilFirstData>,
-        choose::PowerOfTwoChoices,
-    >>>>;
+        choose::PowerOfTwoChoices, http::Request<B>
+    >, http::Request<B>>>>;
 
     // Route the request by its destination AND PROTOCOL. This prevents HTTP/1
     // requests from being routed to HTTP/2 servers, and vice versa.
-    fn recognize(&self, req: &Self::Request) -> Option<Self::Key> {
+    fn recognize(&self, req: &http::Request<B>) -> Option<Self::Key> {
         let dest = Self::destination(req)?;
         let proto = bind::Protocol::detect(req);
         Some((dest, proto))
@@ -202,15 +201,14 @@ pub enum Discovery<B> {
     Addr(Option<(SocketAddr, BindProtocol<B>)>),
 }
 
-impl<B> Discover for Discovery<B>
+impl<B> Discover<http::Request<B>> for Discovery<B>
 where
     B: tower_h2::Body + Send + 'static,
     <B::Data as ::bytes::IntoBuf>::Buf: Send,
 {
     type Key = SocketAddr;
-    type Request = http::Request<B>;
     type Response = bind::HttpResponse;
-    type Error = <Self::Service as tower::Service>::Error;
+    type Error = <Self::Service as tower::Service<http::Request<B>>>::Error;
     type Service = bind::Service<B>;
     type DiscoverError = BindError;
 
