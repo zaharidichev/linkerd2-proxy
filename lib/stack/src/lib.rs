@@ -14,7 +14,6 @@ pub mod watch;
 pub mod when;
 
 pub use self::either::Either;
-pub use self::optional::Optional;
 pub use self::layer::Layer;
 pub use self::stack_new_service::StackNewService;
 
