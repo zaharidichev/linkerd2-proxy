@@ -34,12 +34,12 @@ pub trait Layer<T, U, M: super::Stack<U>> {
 
     /// Conditionally compose this `Layer with another.
     fn and_when<P, N, L>(self, predicate: P, inner: L)
-        -> AndThen<U, Self, when::Layer<U, P, N, L>>
+        -> AndThen<U, Self, when::Layer<P, L>>
     where
         P: when::Predicate<U> + Clone,
         N: super::Stack<U> + Clone,
         L: Layer<U, U, N, Error = N::Error> + Clone,
-        Self: Layer<T, U, when::Stack<U, P, N, L>> + Sized,
+        Self: Layer<T, U, when::Stack<P, N, L>> + Sized,
     {
         AndThen {
             outer: self,
