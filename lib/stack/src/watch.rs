@@ -1,9 +1,10 @@
 extern crate futures_watch;
 
 use self::futures_watch::Watch;
-use futures::{future::MapErr, Async, Future, Poll, Stream};
-use std::{error, fmt};
+use futures::future::{self, MapErr};
+use futures::{Async, Future, Poll, Stream};
 use std::marker::PhantomData;
+use std::{error, fmt};
 
 use svc;
 
@@ -11,7 +12,7 @@ use svc;
 pub trait WithUpdate<U> {
     type Updated;
 
-    fn with_update(&self, update: &U) -> Self::Updated;
+    fn with_update(self, update: &U) -> Self::Updated;
 }
 
 #[derive(Debug)]
@@ -27,13 +28,27 @@ pub struct Stack<T: WithUpdate<U>, U, M> {
     _p: PhantomData<fn() -> T>,
 }
 
+pub struct StackFuture<T: WithUpdate<U>, U, M: svc::Service<T::Updated>> {
+    future: M::Future,
+    inner: Option<(T, Watch<U>, M)>,
+}
+
 /// A Service that updates itself as a Watch updates.
-#[derive(Debug)]
-pub struct Service<T: WithUpdate<U>, U, M: super::Stack<T::Updated>> {
+pub struct Service<T: WithUpdate<U>, U, M: svc::Service<T::Updated>> {
     watch: Watch<U>,
     target: T,
     stack: M,
-    inner: M::Value,
+    state: State<T, U, M>,
+}
+
+enum State<T: WithUpdate<U>, U, M: svc::Service<T::Updated>> {
+    Pending(Pending<T::Updated, M>),
+    Ready(M::Response),
+}
+
+enum Pending<T, M: svc::Service<T>> {
+    Init { target: Option<T>, stack: M },
+    Pending(M::Future),
 }
 
 #[derive(Debug)]
@@ -44,14 +59,14 @@ pub enum Error<I, M> {
 
 /// A special implemtation of WithUpdate that clones the observed update value.
 #[derive(Clone, Debug)]
-pub struct CloneUpdate {}
+pub struct CloneUpdate;
 
 // === impl Layer ===
 
 pub fn layer<T, U, M>(watch: Watch<U>) -> Layer<T, U, M>
 where
     T: WithUpdate<U> + Clone,
-    M: super::Stack<T::Updated> + Clone,
+    M: svc::Service<T::Updated> + Clone,
 {
     Layer {
         watch,
@@ -62,7 +77,7 @@ where
 impl<T, U, M> Clone for Layer<T, U, M>
 where
     T: WithUpdate<U> + Clone,
-    M: super::Stack<T::Updated> + Clone,
+    M: svc::Service<T::Updated> + Clone,
 {
     fn clone(&self) -> Self {
         layer(self.watch.clone())
@@ -72,10 +87,10 @@ where
 impl<T, U, M> super::Layer<T, T::Updated, M> for Layer<T, U, M>
 where
     T: WithUpdate<U> + Clone,
-    M: super::Stack<T::Updated> + Clone,
+    M: svc::Service<T::Updated> + Clone,
 {
-    type Value = <Stack<T, U, M> as super::Stack<T>>::Value;
-    type Error = <Stack<T, U, M> as super::Stack<T>>::Error;
+    type Value = <Stack<T, U, M> as svc::Service<T>>::Response;
+    type Error = <Stack<T, U, M> as svc::Service<T>>::Error;
     type Stack = Stack<T, U, M>;
 
     fn bind(&self, inner: M) -> Self::Stack {
@@ -99,21 +114,29 @@ impl<T: WithUpdate<U>, U, M: Clone> Clone for Stack<T, U, M> {
     }
 }
 
-impl<T, U, M> super::Stack<T> for Stack<T, U, M>
+impl<T, U, M> svc::Service<T> for Stack<T, U, M>
 where
     T: WithUpdate<U> + Clone,
-    M: super::Stack<T::Updated> + Clone,
+    M: svc::Service<T::Updated> + Clone,
 {
-    type Value = Service<T, U, M>;
+    type Response = Service<T, U, M>;
     type Error = M::Error;
+    type Future = future::FutureResult<Self::Response, Self::Error>;
 
-    fn make(&self, target: &T) -> Result<Self::Value, Self::Error> {
-        let inner = self.inner.make(&target.with_update(&*self.watch.borrow()))?;
-        Ok(Service {
-            inner,
-            watch: self.watch.clone(),
-            target: target.clone(),
+    fn poll_ready(&mut self) -> Poll<(), Self::Error> {
+        self.inner.poll_ready()
+    }
+
+    fn call(&mut self, target: T) -> Self::Future {
+        let p = Pending::Init {
+            target: Some(target.clone().with_update(&*self.watch.borrow())),
             stack: self.inner.clone(),
+        };
+        future::ok(Service {
+            target,
+            stack: self.inner.clone(),
+            watch: self.watch.clone(),
+            state: State::Pending(p),
         })
     }
 }
@@ -122,65 +145,116 @@ where
 
 impl<T, U, M, R> svc::Service<R> for Service<T, U, M>
 where
-    T: WithUpdate<U>,
-    M: super::Stack<T::Updated>,
-    M::Value: svc::Service<R>,
+    T: WithUpdate<U> + Clone,
+    M: svc::Service<T::Updated> + Clone,
+    M::Response: svc::Service<R>,
 {
-    type Response = <M::Value as svc::Service<R>>::Response;
-    type Error = Error<<M::Value as svc::Service<R>>::Error, M::Error>;
+    type Response = <M::Response as svc::Service<R>>::Response;
+    type Error = Error<<M::Response as svc::Service<R>>::Error, M::Error>;
     type Future = MapErr<
-        <M::Value as svc::Service<R>>::Future,
-        fn(<M::Value as svc::Service<R>>::Error) -> Self::Error,
+        <M::Response as svc::Service<R>>::Future,
+        fn(<M::Response as svc::Service<R>>::Error) -> Self::Error,
     >;
 
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
-        // Check to see if the watch has been updated and, if so, rebind the service.
-        //
-        // `watch.poll()` can't actually fail; so errors are not considered.
         while let Ok(Async::Ready(Some(()))) = self.watch.poll() {
-            let updated = self.target.with_update(&*self.watch.borrow());
-            // `inner` is only updated if `updated` is valid. The caller may
-            // choose to continue using the service or discard as is
-            // appropriate.
-            self.inner = self.stack.make(&updated).map_err(Error::Stack)?;
+            let target = Some(self.target.clone().with_update(&*self.watch.borrow()));
+            let stack = self.stack.clone();
+            self.state = State::Pending(Pending::Init { target, stack });
         }
 
-        self.inner.poll_ready().map_err(Error::Inner)
+        loop {
+            self.state = match self.state {
+                State::Pending(ref mut p) => {
+                    let svc = try_ready!(p.poll().map_err(Error::Stack));
+                    State::Ready(svc)
+                }
+                State::Ready(ref mut svc) => {
+                    return svc.poll_ready().map_err(Error::Inner);
+                }
+            };
+        }
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        self.inner.call(req).map_err(Error::Inner)
+        if let State::Ready(ref mut svc) = self.state {
+            return svc.call(req).map_err(Error::Inner);
+        }
+
+        unreachable!("service must be ready");
     }
 }
 
 impl<U, M> Service<CloneUpdate, U, M>
 where
     U: Clone,
-    M: super::Stack<U>,
+    M: svc::Service<U> + Clone,
 {
-    pub fn try(watch: Watch<U>, stack: M) -> Result<Self, M::Error> {
-        let inner = stack.make(&*watch.borrow())?;
-        Ok(Self {
-            inner,
-            watch,
+    pub fn cloning(watch: Watch<U>, stack: M) -> Self {
+        let p = Pending::Init {
+            target: Some((*watch.borrow()).clone()),
+            stack: stack.clone(),
+        };
+        Service {
             stack,
-            target: CloneUpdate {},
-        })
+            watch,
+            target: CloneUpdate,
+            state: State::Pending(p),
+        }
     }
 }
 
 impl<T, U, M> Clone for Service<T, U, M>
 where
     T: WithUpdate<U> + Clone,
-    M: super::Stack<T::Updated> + Clone,
-    M::Value: Clone,
+    T::Updated: Clone,
+    M: svc::Service<T::Updated> + Clone,
+    M::Response: Clone,
 {
     fn clone(&self) -> Self {
         Self {
-            inner: self.inner.clone(),
-            watch: self.watch.clone(),
             stack: self.stack.clone(),
+            watch: self.watch.clone(),
             target: self.target.clone(),
+            state: match self.state {
+                State::Pending(Pending::Init {
+                    ref target,
+                    ref stack,
+                }) => State::Pending(Pending::Init {
+                    target: target.clone(),
+                    stack: stack.clone(),
+                }),
+                State::Pending(Pending::Pending(_)) => State::Pending(Pending::Init {
+                    target: Some(self.target.clone().with_update(&*self.watch.borrow())),
+                    stack: self.stack.clone(),
+                }),
+                State::Ready(ref svc) => State::Ready(svc.clone()),
+            },
+        }
+    }
+}
+
+// === impl Pending ===
+
+impl<T, M: svc::Service<T>> Future for Pending<T, M> {
+    type Item = M::Response;
+    type Error = M::Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        loop {
+            *self = match self {
+                Pending::Init {
+                    ref mut target,
+                    ref mut stack,
+                } => {
+                    try_ready!(stack.poll_ready());
+                    let t = target.take().expect("target must be set");
+                    Pending::Pending(stack.call(t))
+                }
+                Pending::Pending(ref mut f) => {
+                    return f.poll();
+                }
+            };
         }
     }
 }
@@ -190,7 +264,7 @@ where
 impl<U: Clone> WithUpdate<U> for CloneUpdate {
     type Updated = U;
 
-    fn with_update(&self, update: &U) -> U {
+    fn with_update(self, update: &U) -> U {
         update.clone()
     }
 }
@@ -216,7 +290,7 @@ mod tests {
     use self::task::test_util::BlockOnFor;
     use self::tokio::runtime::current_thread::Runtime;
     use super::*;
-    use futures::future;
+    use futures::{future, Poll};
     use std::time::Duration;
     use svc::Service as _Service;
 
@@ -251,16 +325,22 @@ mod tests {
         }
 
         struct Stack;
-        impl ::Stack<usize> for Stack {
-            type Value = Svc;
+        impl ::svc::Service<usize> for Stack {
+            type Response = Svc;
             type Error = ();
-            fn make(&self, n: &usize) -> Result<Svc, ()> {
-                Ok(Svc(*n))
+            type Future = future::FutureResult<Self::Response, Self::Error>;
+
+            fn poll_ready(&self) -> Poll<(), Never> {
+                Ok(().into())
+            }
+
+            fn call(&self, n: &usize) -> Self::Future {
+                future::ok(Svc(*n))
             }
         }
 
         let (watch, mut store) = Watch::new(1);
-        let mut svc = Service::try(watch, Stack).unwrap();
+        let mut svc = Service::cloning(watch, Stack);
 
         assert_ready!(svc);
         assert_eq!(call!(svc), 1);

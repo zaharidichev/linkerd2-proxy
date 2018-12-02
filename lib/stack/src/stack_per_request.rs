@@ -1,4 +1,4 @@
-use futures::Poll;
+use futures::{future, Future, Poll};
 use std::fmt;
 
 use svc;
@@ -22,20 +22,24 @@ pub struct Stack<M> {
 ///
 /// `Service` does not handle any underlying errors and it is expected that an
 /// instance will not be used after an error is returned.
-pub struct Service<T, M: super::Stack<T>> {
-    // When `poll_ready` is called, the _next_ service to be used may be bound
-    // ahead-of-time. This stack is used only to serve the next request to this
-    // service.
-    next: Option<M::Value>,
-    make: StackValid<T, M>,
+pub struct Service<T, S>
+where
+    T: ShouldStackPerRequest + Clone,
+    S: svc::Service<T>,
+{
+    stack: S,
+    target: T,
+    state: State<S::Future>,
 }
 
-/// A helper that asserts `M` can successfully build services for a specific
-/// value of `T`.
-#[derive(Clone, Debug)]
-struct StackValid<T, M: super::Stack<T>> {
-    target: T,
-    make: M,
+pub enum Error<M, S> {
+    Stack(M),
+    Service(S),
+}
+
+enum State<F: Future> {
+    Pending(F),
+    Ready(Option<F::Item>),
 }
 
 // === Layer ===
@@ -47,11 +51,11 @@ pub fn layer() -> Layer {
 impl<T, N> super::Layer<T, T, N> for Layer
 where
     T: ShouldStackPerRequest + Clone,
-    N: super::Stack<T> + Clone,
+    N: svc::Service<T> + Clone,
     N::Error: fmt::Debug,
 {
-    type Value = <Stack<N> as super::Stack<T>>::Value;
-    type Error = <Stack<N> as super::Stack<T>>::Error;
+    type Value = <Stack<N> as svc::Service<T>>::Response;
+    type Error = <Stack<N> as svc::Service<T>>::Error;
     type Stack = Stack<N>;
 
     fn bind(&self, inner: N) -> Self::Stack {
@@ -61,27 +65,34 @@ where
 
 // === Stack ===
 
-impl<T, N> super::Stack<T> for Stack<N>
+impl<T, N> svc::Service<T> for Stack<N>
 where
     T: ShouldStackPerRequest + Clone,
-    N: super::Stack<T> + Clone,
+    N: svc::Service<T> + Clone,
     N::Error: fmt::Debug,
 {
-    type Value = super::Either<Service<T, N>, N::Value>;
+    type Response = super::Either<Service<T, N>, N::Response>;
     type Error = N::Error;
+    type Future = future::Either<
+        future::FutureResult<Self::Response, Self::Error>,
+        future::Map<N::Future, fn(N::Response) -> Self::Response>,
+    >;
 
-    fn make(&self, target: &T) -> Result<Self::Value, N::Error> {
-        let inner = self.inner.make(target)?;
+    fn poll_ready(&mut self) -> Poll<(), Self::Error> {
+        self.inner.poll_ready()
+    }
+
+    fn call(&mut self, target: T) -> Self::Future {
         if target.should_stack_per_request() {
-            Ok(super::Either::A(Service {
-                next: Some(inner),
-                make: StackValid {
-                    make: self.inner.clone(),
-                    target: target.clone(),
-                },
-            }))
+            let svc = Service {
+                target,
+                stack: self.inner.clone(),
+                state: State::Ready(None),
+            };
+            future::Either::A(future::ok(super::Either::A(svc)))
         } else {
-            Ok(super::Either::B(inner))
+            let fut = self.inner.call(target);
+            future::Either::B(fut.map(|s| super::Either::B(s)))
         }
     }
 }
@@ -91,57 +102,43 @@ where
 impl<T, N, R> svc::Service<R> for Service<T, N>
 where
     T: ShouldStackPerRequest + Clone,
-    N: super::Stack<T> + Clone,
-    N::Value: svc::Service<R>,
+    N: svc::Service<T> + Clone,
+    N::Response: svc::Service<R>,
     N::Error: fmt::Debug,
 {
-    type Response = <N::Value as svc::Service<R>>::Response;
-    type Error = <N::Value as svc::Service<R>>::Error;
-    type Future = <N::Value as svc::Service<R>>::Future;
+    type Response = <N::Response as svc::Service<R>>::Response;
+    type Error = Error<N::Error, <N::Response as svc::Service<R>>::Error>;
+    type Future = future::MapErr<
+        <N::Response as svc::Service<R>>::Future,
+        fn(<N::Response as svc::Service<R>>::Error) -> Self::Error,
+    >;
 
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
-        if let Some(ref mut svc) = self.next {
-            return svc.poll_ready();
+        loop {
+            self.state = match self.state {
+                State::Ready(None) => {
+                    try_ready!(self.stack.poll_ready().map_err(Error::Stack));
+                    let fut = self.stack.call(self.target.clone());
+                    State::Pending(fut)
+                }
+                State::Pending(ref mut f) => {
+                    let svc = try_ready!(f.poll().map_err(Error::Stack));
+                    State::Ready(Some(svc))
+                }
+                State::Ready(Some(ref mut svc)) => {
+                    return svc.poll_ready().map_err(Error::Service);
+                }
+            };
         }
-
-        trace!("poll_ready: new disposable client");
-        let mut svc = self.make.make_valid();
-        let ready = svc.poll_ready()?;
-        self.next = Some(svc);
-        Ok(ready)
     }
 
     fn call(&mut self, request: R) -> Self::Future {
-        // If a service has already been bound in `poll_ready`, consume it.
-        // Otherwise, bind a new service on-the-spot.
-        self.next
-            .take()
-            .unwrap_or_else(|| self.make.make_valid())
-            .call(request)
-    }
-}
-
-impl<T, N> Clone for Service<T, N>
-where
-    T: ShouldStackPerRequest + Clone,
-    N: super::Stack<T> + Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            next: None,
-            make: self.make.clone(),
+        if let State::Ready(ref mut svc) = self.state {
+            if let Some(ref mut svc) = svc.take() {
+                return svc.call(request).map_err(Error::Service);
+            }
         }
-    }
-}
 
-// === StackValid ===
-
-impl<T, M> StackValid<T, M>
-where
-    M: super::Stack<T>,
-    M::Error: fmt::Debug,
-{
-    fn make_valid(&self) -> M::Value {
-        self.make.make(&self.target).expect("make must succeed")
+        unreachable!("poll_ready must return ready before calling this service");
     }
 }

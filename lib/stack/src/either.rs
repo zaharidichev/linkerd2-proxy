@@ -13,33 +13,17 @@ pub enum Either<A, B> {
 impl<T, U, A, B, N> super::Layer<T, U, N> for Either<A, B>
 where
     A: super::Layer<T, U, N>,
-    B: super::Layer<T, U, N, Error = A::Error>,
-    N: super::Stack<U>
+    B: super::Layer<T, U, N, Value = A::Value>,
+    N: svc::Service<U>,
 {
-    type Value = <Either<A::Stack, B::Stack> as super::Stack<T>>::Value;
-    type Error = <Either<A::Stack, B::Stack> as super::Stack<T>>::Error;
+    type Value = <Either<A::Stack, B::Stack> as svc::Service<T>>::Response;
+    type Error = <Either<A::Stack, B::Stack> as svc::Service<T>>::Error;
     type Stack = Either<A::Stack, B::Stack>;
 
     fn bind(&self, next: N) -> Self::Stack {
         match self {
             Either::A(ref a) => Either::A(a.bind(next)),
             Either::B(ref b) => Either::B(b.bind(next)),
-        }
-    }
-}
-
-impl<T, N, M> super::Stack<T> for Either<N, M>
-where
-    N: super::Stack<T>,
-    M: super::Stack<T, Error = N::Error>,
-{
-    type Value = Either<N::Value, M::Value>;
-    type Error = Either<N::Error, M::Error>;
-
-    fn make(&self, target: &T) -> Result<Self::Value, Self::Error> {
-        match self {
-            Either::A(ref a) => a.make(target).map(Either::A).map_err(Either::A),
-            Either::B(ref b) => b.make(target).map(Either::B).map_err(Either::B),
         }
     }
 }

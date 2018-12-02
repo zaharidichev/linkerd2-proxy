@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use svc;
 
 /// A `Layer` wraps `M`-typed `Stack<U>` to produce a `Stack<T>`
 ///
@@ -10,10 +11,10 @@ use std::marker::PhantomData;
 /// ```ignore
 /// impl<M: Stack<SocketAddr>> Layer<Authority, SocketAddr, M> for BalanceLayer<M> { ... }
 /// ```
-pub trait Layer<T, U, S: super::Stack<U>> {
+pub trait Layer<T, U, S: svc::Service<U>> {
     type Value;
     type Error;
-    type Stack: super::Stack<T, Value = Self::Value, Error = Self::Error>;
+    type Stack: svc::Service<T, Response = Self::Value, Error = Self::Error>;
 
     /// Produces a `Stack` value from a `M` value.
     fn bind(&self, next: S) -> Self::Stack;
@@ -22,7 +23,7 @@ pub trait Layer<T, U, S: super::Stack<U>> {
     fn and_then<V, N, L>(self, inner: L)
         -> AndThen<U, Self, L>
     where
-        N: super::Stack<V>,
+        N: svc::Service<V>,
         L: Layer<U, V, N>,
         Self: Layer<T, U, L::Stack> + Sized,
     {
@@ -60,8 +61,8 @@ pub trait Layer<T, U, S: super::Stack<U>> {
 }
 
 /// The identity layer.
-impl<T, M: super::Stack<T>> Layer<T, T, M> for () {
-    type Value = M::Value;
+impl<T, M: svc::Service<T>> Layer<T, T, M> for () {
+    type Value = M::Response;
     type Error = M::Error;
     type Stack = M;
 
@@ -88,7 +89,7 @@ impl<T, U, V, M, Outer, Inner> Layer<T, V, M>
 where
     Outer: Layer<T, U, Inner::Stack>,
     Inner: Layer<U, V, M>,
-    M: super::Stack<V>,
+    M: svc::Service<V>,
 {
     type Value = Outer::Value;
     type Error = Outer::Error;
