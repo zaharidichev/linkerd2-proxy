@@ -1,28 +1,73 @@
+#[macro_use]
 extern crate futures;
 extern crate indexmap;
+extern crate linkerd2_buffer as buffer;
 extern crate linkerd2_stack as stack;
+extern crate tokio;
 extern crate tower_service as svc;
 
-use futures::{Future, Poll};
-
-use std::{error, fmt, mem};
+use futures::sync::{mpsc, oneshot};
+use futures::{future::Executor, Async, Future, Poll, Stream};
 use std::hash::Hash;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::{error, fmt};
+use svc::Service as _Service;
+use tokio::executor::DefaultExecutor;
 
 mod cache;
 
 use self::cache::Cache;
 
+const TODO_ROUTER_BUFFER_CAPACITY: usize = 1000;
+const TODO_SERVICE_BUFFER_CAPACITY: usize = 100;
+
+pub fn new<Req, Rec, Stk>(
+    recognize: Rec,
+    stack: Stk,
+    capacity: usize,
+    max_idle_age: Duration,
+) -> (Router<Req, Rec, Stk>, Daemon<Req, Rec, Stk>)
+where
+    Rec: Recognize<Req>,
+    Stk: svc::Service<Rec::Target>,
+    Stk::Response: svc::Service<Req>,
+    Stk::Error: fmt::Display,
+    <Stk::Response as svc::Service<Req>>::Error: fmt::Display,
+{
+    let (tx, rx) = mpsc::channel(TODO_ROUTER_BUFFER_CAPACITY);
+    let router = Router { recognize, tx };
+
+    let cache = Cache::new(capacity, max_idle_age);
+    let daemon = Daemon { rx, stack, cache };
+
+    (router, daemon)
+}
+
 /// Routes requests based on a configurable `Key`.
 pub struct Router<Req, Rec, Stk>
 where
     Rec: Recognize<Req>,
-    Stk: stack::Stack<Rec::Target>,
-    Stk::Value: svc::Service<Req>,
+    Stk: svc::Service<Rec::Target>,
+    Stk::Response: svc::Service<Req>,
 {
-    inner: Arc<Inner<Req, Rec, Stk>>,
+    recognize: Rec,
+    tx: Tx<Rec::Target, Req, Stk::Response, Stk::Error>,
 }
+
+pub struct Daemon<Req, Rec, Stk>
+where
+    Rec: Recognize<Req>,
+    Stk: svc::Service<Rec::Target>,
+    Stk::Response: svc::Service<Req>,
+{
+    rx: Rx<Rec::Target, Req, Stk::Response, Stk::Error>,
+    stack: Stk,
+    cache: Cache<Rec::Target, buffer::Service<Req, Stk::Response>>,
+}
+
+type SvcResult<R, S, E> = Result<buffer::Service<R, S>, Error<E, <S as svc::Service<R>>::Error>>;
+type Rx<T, R, S, E> = mpsc::Receiver<(T, oneshot::Sender<SvcResult<R, S, E>>)>;
+type Tx<T, R, S, E> = mpsc::Sender<(T, oneshot::Sender<SvcResult<R, S, E>>)>;
 
 /// Provides a strategy for routing a Request to a Service.
 ///
@@ -39,49 +84,35 @@ pub trait Recognize<Request> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Error<T, U> {
-    Inner(T),
-    Route(U),
+pub enum Error<I, E> {
+    Stack(I),
+    Service(E),
     NoCapacity(usize),
+    NotRecognized,
+    LostDaemon,
+}
+
+pub struct RspFuture<R, S, E>(RspState<R, S, E>)
+where
+    S: svc::Service<R>;
+
+enum RspState<R, S, E>
+where
+    S: svc::Service<R>,
+{
+    Init(Option<R>, oneshot::Receiver<SvcResult<R, S, E>>),
+    NotReady(Option<R>, buffer::Service<R, S>),
+    Pending(<buffer::Service<R, S> as svc::Service<R>>::Future),
     NotRecognized,
 }
 
-pub struct ResponseFuture<F, E>
-where
-    F: Future,
-{
-    state: State<F, E>,
-}
-
-struct Inner<Req, Rec, Stk>
-where
-    Rec: Recognize<Req>,
-    Stk: stack::Stack<Rec::Target>,
-    Stk::Value: svc::Service<Req>,
-{
-    recognize: Rec,
-    make: Stk,
-    cache: Mutex<Cache<Rec::Target, Stk::Value>>,
-}
-
-enum State<F, E>
-where
-    F: Future,
-{
-    Inner(F),
-    RouteError(E),
-    NoCapacity(usize),
-    NotRecognized,
-    Invalid,
-}
-
-// ===== impl Recognize =====
+// === impl Recognize ===
 
 impl<R, T, F> Recognize<R> for F
 where
     T: Clone + Eq + Hash,
     F: Fn(&R) -> Option<T>,
- {
+{
     type Target = T;
 
     fn recognize(&self, req: &R) -> Option<T> {
@@ -89,184 +120,185 @@ where
     }
 }
 
-// ===== impl Router =====
-
-impl<Req, Rec, Stk> Router<Req, Rec, Stk>
-where
-    Rec: Recognize<Req>,
-    Stk: stack::Stack<Rec::Target>,
-    Stk::Value: svc::Service<Req>,
-{
-    pub fn new(recognize: Rec, make: Stk, capacity: usize, max_idle_age: Duration) -> Self {
-        Router {
-            inner: Arc::new(Inner {
-                recognize,
-                make,
-                cache: Mutex::new(Cache::new(capacity, max_idle_age)),
-            }),
-        }
-    }
-}
+// === impl Router ===
 
 impl<Req, Rec, Stk> svc::Service<Req> for Router<Req, Rec, Stk>
 where
     Rec: Recognize<Req>,
-    Stk: stack::Stack<Rec::Target>,
-    Stk::Value: svc::Service<Req>,
+    Stk: svc::Service<Rec::Target>,
+    Stk::Response: svc::Service<Req>,
 {
-    type Response = <Stk::Value as svc::Service<Req>>::Response;
-    type Error = Error<<Stk::Value as svc::Service<Req>>::Error, Stk::Error>;
-    type Future = ResponseFuture<<Stk::Value as svc::Service<Req>>::Future, Stk::Error>;
+    type Response = <Stk::Response as svc::Service<Req>>::Response;
+    type Error = Error<Stk::Error, <Stk::Response as svc::Service<Req>>::Error>;
+    type Future = RspFuture<Req, Stk::Response, Stk::Error>;
 
     /// Always ready to serve.
     ///
     /// Graceful backpressure is **not** supported at this level, since each request may
     /// be routed to different resources. Instead, requests should be issued and each
     /// route should support a queue of requests.
-    ///
-    /// TODO Attempt to free capacity in the router.
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
-        Ok(().into())
+        self.tx.poll_ready().map_err(|_| Error::LostDaemon)
     }
 
     /// Routes the request through an underlying service.
     ///
     /// The response fails when the request cannot be routed.
     fn call(&mut self, request: Req) -> Self::Future {
-        let target = match self.inner.recognize.recognize(&request) {
+        let target = match self.recognize.recognize(&request) {
             Some(target) => target,
-            None => return ResponseFuture::not_recognized(),
+            None => return RspFuture(RspState::NotRecognized),
         };
 
-        let cache = &mut *self.inner.cache.lock().expect("lock router cache");
-
-        // First, try to load a cached route for `target`.
-        if let Some(mut service) = cache.access(&target) {
-            return ResponseFuture::new(service.call(request));
-        }
-
-        // Since there wasn't a cached route, ensure that there is capacity for a
-        // new one.
-        let reserve = match cache.reserve() {
-            Ok(r) => r,
-            Err(cache::CapacityExhausted { capacity }) => {
-                return ResponseFuture::no_capacity(capacity);
-            }
-        };
-
-        // Bind a new route, send the request on the route, and cache the route.
-        let mut service = match self.inner.make.make(&target) {
-            Ok(svc) => svc,
-            Err(e) => return ResponseFuture { state: State::RouteError(e) },
-        };
-
-        let response = service.call(request);
-        reserve.store(target, service);
-
-        ResponseFuture::new(response)
+        let (tx, rx) = oneshot::channel();
+        let _ = self.tx.try_send((target, tx));
+        RspFuture(RspState::Init(Some(request), rx))
     }
 }
 
 impl<Req, Rec, Stk> Clone for Router<Req, Rec, Stk>
 where
-    Rec: Recognize<Req>,
-    Stk: stack::Stack<Rec::Target>,
-    Stk::Value: svc::Service<Req>,
+    Rec: Recognize<Req> + Clone,
+    Stk: svc::Service<Rec::Target>,
+    Stk::Response: svc::Service<Req>,
 {
     fn clone(&self) -> Self {
-        Router { inner: self.inner.clone() }
+        Router {
+            tx: self.tx.clone(),
+            recognize: self.recognize.clone(),
+        }
     }
 }
 
-// ===== impl ResponseFuture =====
+// === impl RspFuture ===
 
-impl<F, E> ResponseFuture<F, E>
+impl<R, S, E> Future for RspFuture<R, S, E>
 where
-    F: Future,
+    S: svc::Service<R>,
 {
-    fn new(inner: F) -> Self {
-        ResponseFuture { state: State::Inner(inner) }
-    }
-
-    fn not_recognized() -> Self {
-        ResponseFuture { state: State::NotRecognized }
-    }
-
-    fn no_capacity(capacity: usize) -> Self {
-        ResponseFuture { state: State::NoCapacity(capacity) }
-    }
-}
-
-impl<F, E> Future for ResponseFuture<F, E>
-where
-    F: Future,
-{
-    type Item = F::Item;
-    type Error = Error<F::Error, E>;
+    type Item = S::Response;
+    type Error = Error<E, S::Error>;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        use self::State::*;
-
-        match self.state {
-            Inner(ref mut fut) => fut.poll().map_err(Error::Inner),
-            RouteError(..) => {
-                match mem::replace(&mut self.state, Invalid) {
-                    RouteError(e) => Err(Error::Route(e)),
-                    _ => unreachable!(),
+        loop {
+            self.0 = match self.0 {
+                RspState::Init(ref mut req, ref mut svc_rx) => {
+                    let svc = try_ready!(svc_rx.poll().map_err(|_| Error::LostDaemon))?;
+                    RspState::NotReady(req.take(), svc)
                 }
-            }
-            NotRecognized => Err(Error::NotRecognized),
-            NoCapacity(capacity) => Err(Error::NoCapacity(capacity)),
-            Invalid => panic!("response future polled after ready"),
+                RspState::NotReady(ref mut req, ref mut svc) => {
+                    try_ready!(svc.poll_ready().map_err(|_| Error::LostDaemon));
+                    let req = req.take().expect("request must be set");
+                    RspState::Pending(svc.call(req))
+                }
+                RspState::Pending(ref mut fut) => {
+                    return fut.poll().map_err(|e| match e {
+                        buffer::Error::LostDaemon => Error::LostDaemon,
+                        buffer::Error::Service(e) => Error::Service(e),
+                    })
+                }
+                RspState::NotRecognized => return Err(Error::NotRecognized),
+            };
         }
     }
 }
 
-// ===== impl Error =====
+// === impl Daemon ===
 
-impl<T, U> fmt::Display for Error<T, U>
+impl<Req, Rec, Stk> Future for Daemon<Req, Rec, Stk>
 where
-    T: fmt::Display,
-    U: fmt::Display,
+    Req: Send + 'static,
+    Rec: Recognize<Req>,
+    Stk: svc::Service<Rec::Target>,
+    Stk::Response: svc::Service<Req> + Send + 'static,
+    Stk::Future: Send + 'static,
+    Stk::Error: fmt::Display,
+    <Stk::Response as svc::Service<Req>>::Error: fmt::Display,
+    <Stk::Response as svc::Service<Req>>::Response: Send + 'static,
+    <Stk::Response as svc::Service<Req>>::Future: Send + 'static,
+{
+    type Item = ();
+    type Error = ();
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        loop {
+            match self.rx.poll() {
+                Ok(Async::NotReady) => return Ok(Async::NotReady),
+                Ok(Async::Ready(Some((target, svc_tx)))) => {
+                    // First, try to load a cached route for `target`.
+                    if let Some(svc) = self.cache.access(&target) {
+                        let _ = svc_tx.send(Ok(svc.clone()));
+                        continue;
+                    }
+
+                    // Since there wasn't a cached route, ensure that there is capacity for a
+                    // new one.
+                    let reserve = match self.cache.reserve() {
+                        Ok(r) => r,
+                        Err(cache::CapacityExhausted { capacity }) => {
+                            let _ = svc_tx.send(Err(Error::NoCapacity(capacity)));
+                            continue;
+                        }
+                    };
+
+                    let fut = self.stack.call(target.clone());
+                    let (svc, daemon) = buffer::new(fut, TODO_SERVICE_BUFFER_CAPACITY);
+                    let _ = DefaultExecutor::current().execute(daemon);
+
+                    reserve.store(target, svc.clone());
+                    let _ = svc_tx.send(Ok(svc));
+                }
+                Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
+            }
+        }
+    }
+}
+
+// === impl Error ===
+
+impl<I, E> fmt::Display for Error<I, E>
+where
+    I: fmt::Display,
+    E: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Inner(ref why) => fmt::Display::fmt(why, f),
-            Error::Route(ref why) =>
-                write!(f, "route recognition failed: {}", why),
+        match self {
+            Error::Stack(ref why) => fmt::Display::fmt(why, f),
+            Error::Service(ref why) => fmt::Display::fmt(why, f),
             Error::NotRecognized => f.pad("route not recognized"),
             Error::NoCapacity(capacity) => write!(f, "router capacity reached ({})", capacity),
+            Error::LostDaemon => write!(f, "daemon task ended prematurely"),
         }
     }
 }
 
-impl<T, U> error::Error for Error<T, U>
+impl<I, E> error::Error for Error<I, E>
 where
-    T: error::Error,
-    U: error::Error,
+    I: error::Error,
+    E: error::Error,
 {
     fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Inner(ref why) => Some(why),
-            Error::Route(ref why) => Some(why),
+        match self {
+            Error::Stack(ref why) => Some(why),
+            Error::Service(ref why) => Some(why),
             _ => None,
         }
     }
 
     fn description(&self) -> &str {
-        match *self {
-            Error::Inner(_) => "inner service error",
-            Error::Route(_) => "route recognition failed",
+        match self {
+            Error::Stack(_) => "inner stacking error",
+            Error::Service(_) => "inner service error",
             Error::NoCapacity(_) => "router capacity reached",
             Error::NotRecognized => "route not recognized",
+            Error::LostDaemon => "daemon task ended prematurely",
         }
     }
 }
 
 #[cfg(test)]
 mod test_util {
-    use futures::{Poll, future};
-    use stack::Stack;
+    use futures::{future, Poll};
     use svc::Service;
 
     pub struct Recognize;
@@ -280,7 +312,7 @@ mod test_util {
         Recognized(usize),
     }
 
-    // ===== impl Recognize =====
+    // === impl Recognize ===
 
     impl super::Recognize<Request> for Recognize {
         type Target = usize;
@@ -293,16 +325,17 @@ mod test_util {
         }
     }
 
-    impl Stack<usize> for Recognize {
-        type Value = MultiplyAndAssign;
+    impl svc::Service<usize> for Recognize {
+        type Response = MultiplyAndAssign;
         type Error = ();
+        type Future = future::FutureResult<Self::Response, Self::Error>;
 
-        fn make(&self, _: &usize) -> Result<Self::Value, Self::Error> {
-            Ok(MultiplyAndAssign(1))
+        fn call(&self, _: &usize) -> Self::Future {
+            futture::ok(MultiplyAndAssign(1))
         }
     }
 
-    // ===== impl MultiplyAndAssign =====
+    // === impl MultiplyAndAssign ===
 
     impl Default for MultiplyAndAssign {
         fn default() -> Self {
@@ -338,11 +371,11 @@ mod test_util {
 
 #[cfg(test)]
 mod tests {
+    use super::{Error, Router};
     use futures::Future;
     use std::time::Duration;
-    use test_util::*;
     use svc::Service;
-    use super::{Error, Router};
+    use test_util::*;
 
     impl Router<Request, Recognize, Recognize> {
         fn call_ok(&mut self, req: Request) -> usize {

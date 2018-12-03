@@ -1,6 +1,7 @@
 [workspace]
 members = [
     ".",
+    "lib/buffer",
     "lib/fs-watch",
     "lib/futures-mpsc-lossy",
     "lib/hyper-balance",
