@@ -8,6 +8,7 @@ extern crate tower_service as svc;
 
 use futures::sync::{mpsc, oneshot};
 use futures::{future::Executor, Async, Future, Poll, Stream};
+use indexmap::IndexMap;
 use std::hash::Hash;
 use std::time::Duration;
 use std::{error, fmt};
@@ -24,8 +25,7 @@ const TODO_SERVICE_BUFFER_CAPACITY: usize = 100;
 pub fn new<Req, Rec, Stk>(
     recognize: Rec,
     stack: Stk,
-    capacity: usize,
-    max_idle_age: Duration,
+    route_table_capacity: usize,
 ) -> (Router<Req, Rec, Stk>, Daemon<Req, Rec, Stk>)
 where
     Rec: Recognize<Req>,
@@ -37,8 +37,14 @@ where
     let (tx, rx) = mpsc::channel(TODO_ROUTER_BUFFER_CAPACITY);
     let router = Router { recognize, tx };
 
-    let cache = Cache::new(capacity, max_idle_age);
-    let daemon = Daemon { rx, stack, cache };
+    let daemon = Daemon {
+        rx,
+        stack,
+        // It's assumed a router will have at least two routes, otherwise there
+        // wouldn't be a router.
+        route_table: IndexMap::with_capacity(2),
+        route_table_capacity,
+    };
 
     (router, daemon)
 }
@@ -62,7 +68,9 @@ where
 {
     rx: Rx<Rec::Target, Req, Stk::Response, Stk::Error>,
     stack: Stk,
-    cache: Cache<Rec::Target, buffer::Service<Req, Stk::Response>>,
+
+    route_table: IndexMap<Rec::Target, buffer::Service<Req, Stk::Response>>,
+    route_table_capacity: usize,
 }
 
 type SvcResult<R, S, E> = Result<buffer::Service<R, S>, Error<E, <S as svc::Service<R>>::Error>>;
@@ -221,14 +229,25 @@ where
     type Error = ();
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        // Drop servicesthat are no longer able to receive requests.
+        // Because the route table holds buffered services, these failures
+        // indicate that the buffer'sdaemon task has completed. This may happen
+        // because:
+        // - The stack did not initialize a service; or
+        // - The service failed to poll_ready().
+        self.route_table
+            .retain(|_, ref mut svc| svc.poll_ready().is_ok());
+
         loop {
             match self.rx.poll() {
                 Ok(Async::NotReady) => return Ok(Async::NotReady),
                 Ok(Async::Ready(Some((target, svc_tx)))) => {
                     // First, try to load a cached route for `target`.
-                    if let Some(svc) = self.cache.access(&target) {
-                        let _ = svc_tx.send(Ok(svc.clone()));
-                        continue;
+                    if let Some(ref mut svc) = self.route_table.get_mut(&target) {
+                        if svc.poll_ready().is_ok() {
+                            let _ = svc_tx.send(Ok(svc.clone()));
+                            continue;
+                        }
                     }
 
                     // Since there wasn't a cached route, ensure that there is capacity for a

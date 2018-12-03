@@ -119,6 +119,7 @@ where
                     Ok(Async::NotReady) => return Ok(Async::NotReady),
                     Ok(Async::Ready(svc)) => StackState::Active(svc),
                     Err(e) => {
+                        // TODO this error should be sent back to receivers....
                         error!("failed to build stack: {}", e);
                         return Ok(Async::Ready(()));
                     }
