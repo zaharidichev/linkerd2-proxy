@@ -140,11 +140,6 @@ where
     type Error = Error<Stk::Error, <Stk::Response as svc::Service<Req>>::Error>;
     type Future = RspFuture<Req, Stk::Response, Stk::Error>;
 
-    /// Always ready to serve.
-    ///
-    /// Graceful backpressure is **not** supported at this level, since each request may
-    /// be routed to different resources. Instead, requests should be issued and each
-    /// route should support a queue of requests.
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
         self.tx.poll_ready().map_err(|_| Error::LostDaemon)
     }
@@ -158,6 +153,8 @@ where
             None => return RspFuture(RspState::NotRecognized),
         };
 
+        // Asynchronously obtain a service for this target, issue the request on
+        // that service, and await its repsonse.
         let (tx, rx) = oneshot::channel();
         let _ = self.tx.try_send((target, tx));
         RspFuture(RspState::Init(Some(request), rx))
@@ -203,7 +200,7 @@ where
                     return fut.poll().map_err(|e| match e {
                         buffer::Error::LostDaemon => Error::LostDaemon,
                         buffer::Error::Service(e) => Error::Service(e),
-                    })
+                    });
                 }
                 RspState::NotRecognized => return Err(Error::NotRecognized),
             };
@@ -255,17 +252,18 @@ where
                     let reserve = match self.cache.reserve() {
                         Ok(r) => r,
                         Err(cache::CapacityExhausted { capacity }) => {
-                            let _ = svc_tx.send(Err(Error::NoCapacity(capacity)));
+                            let _ = svc_tx.send(Err(Error::NoCapacity(self.route_table_capacity)));
                             continue;
                         }
                     };
 
                     let fut = self.stack.call(target.clone());
                     let (svc, daemon) = buffer::new(fut, TODO_SERVICE_BUFFER_CAPACITY);
-                    let _ = DefaultExecutor::current().execute(daemon);
-
-                    reserve.store(target, svc.clone());
-                    let _ = svc_tx.send(Ok(svc));
+                    if DefaultExecutor::current().execute(daemon).is_ok() {
+                        if svc_tx.send(Ok(svc)).is_ok() {
+                            reserve.store(target, svc.clone());
+                        }
+                    }
                 }
                 Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
             }
