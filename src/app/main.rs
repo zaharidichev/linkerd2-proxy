@@ -86,6 +86,8 @@ where
         let control_listener = BoundPort::new(
             config.control_listener.addr,
             Conditional::None(tls::ReasonForNoIdentity::NotImplementedForTap.into()),
+            &logging::Section::Admin,
+            "tap"
         )
         .expect("controller listener bind");
 
@@ -99,12 +101,19 @@ where
                         config: tls_server_config.clone(),
                     })
             });
-            BoundPort::new(config.inbound_listener.addr, tls).expect("public listener bind")
+            BoundPort::new(
+                config.inbound_listener.addr,
+                tls,
+                &logging::Section::Proxy,
+                "in",
+            ).expect("public listener bind")
         };
 
         let outbound_listener = BoundPort::new(
             config.outbound_listener.addr,
             Conditional::None(tls::ReasonForNoTls::InternalTraffic),
+            &logging::Section::Proxy,
+            "out",
         )
         .expect("private listener bind");
 
@@ -114,6 +123,8 @@ where
         let metrics_listener = BoundPort::new(
             config.metrics_listener.addr,
             Conditional::None(tls::ReasonForNoIdentity::NotImplementedForMetrics.into()),
+            &logging::Section::Admin,
+            "metrics",
         )
         .expect("metrics listener bind");
 

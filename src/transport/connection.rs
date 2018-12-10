@@ -14,11 +14,13 @@ use tokio::{
 
 use Conditional;
 use transport::{AddrInfo, BoxedIo, GetOriginalDst, tls};
+use logging;
 
 pub struct BoundPort {
     inner: std::net::TcpListener,
     local_addr: SocketAddr,
     tls: tls::ConditionalConnectionConfig<tls::ServerConfigWatch>,
+    log_ctx: logging::Server,
 }
 
 /// Initiates a client connection to the given address.
@@ -113,15 +115,17 @@ pub struct PeekFuture<T> {
 // ===== impl BoundPort =====
 
 impl BoundPort {
-    pub fn new(addr: SocketAddr, tls: tls::ConditionalConnectionConfig<tls::ServerConfigWatch>)
+    pub fn new(addr: SocketAddr, tls: tls::ConditionalConnectionConfig<tls::ServerConfigWatch>, section: &logging::Section, name: &'static str)
         -> Result<Self, io::Error>
     {
         let inner = std::net::TcpListener::bind(addr)?;
         let local_addr = inner.local_addr()?;
+        let log_ctx = section.server(name, local_addr);
         Ok(BoundPort {
             inner,
             local_addr,
             tls,
+            log_ctx,
         })
     }
 
@@ -178,7 +182,8 @@ impl BoundPort {
     {
         let inner = self.inner;
         let tls = self.tls;
-        future::lazy(move || {
+        let log_ctx = self.log_ctx.clone();
+        let f = future::lazy(move || {
             // Create the TCP listener lazily, so that it's not bound to a
             // reactor until the future is run. This will avoid
             // `Handle::current()` creating a new thread for the global
@@ -186,6 +191,7 @@ impl BoundPort {
             // initialized the runtime.
             TcpListener::from_std(inner, &Handle::current())
         }).and_then(move |mut listener| {
+            let log_ctx = log_ctx;
             let incoming = stream::poll_fn(move || {
                 let ret = try_ready!(listener.poll_accept());
                 Ok(Async::Ready(Some(ret)))
@@ -194,6 +200,7 @@ impl BoundPort {
             incoming
                 .take(connection_limit)
                 .and_then(move |(socket, remote_addr)| {
+                    let log_ctx = log_ctx.clone();
                     // TODO: On Linux and most other platforms it would be better
                     // to set the `TCP_NODELAY` option on the bound socket and
                     // then have the listening sockets inherit it. However, that
@@ -213,7 +220,8 @@ impl BoundPort {
                         Conditional::None(why_no_tls) =>
                             Either::B(future::ok(Connection::plain(socket, *why_no_tls))),
                     };
-                    conn.map(move |conn| (conn, remote_addr))
+                    let f = conn.map(move |conn| (conn, remote_addr));
+                    log_ctx.with_remote(remote_addr).future(f)
                 })
                 .then(|r| {
                     future::ok(match r {
@@ -227,7 +235,8 @@ impl BoundPort {
                 .filter_map(|x| x)
                 .fold(initial, f)
         })
-        .map(|_| ())
+        .map(|_| ());
+        self.log_ctx.future(f)
     }
 }
 
@@ -458,7 +467,10 @@ impl io::Write for Connection {
 
 impl AsyncWrite for Connection {
     fn shutdown(&mut self) -> Poll<(), io::Error> {
-        try_ready!(AsyncWrite::shutdown(&mut self.io));
+        trace!("shutdown; tls={}; io={:?};", self.tls_status, self.io);
+        let shutdown_io = AsyncWrite::shutdown(&mut self.io);
+        trace!(" --> shutdown io: {:?}", shutdown_io);
+        try_ready!(shutdown_io);
 
         // TCP shutdown the write side.
         //
@@ -466,7 +478,9 @@ impl AsyncWrite for Connection {
         // anymore. So, we should tell the remote about this. This
         // is relied upon in our TCP proxy, to start shutting down
         // the pipe if one side closes.
-        self.io.shutdown_write().map(Async::Ready)
+        let shutdown_write = self.io.shutdown_write().map(Async::Ready);
+        trace!(" --> shutdown write: {:?}", shutdown_write);
+        shutdown_write
     }
 
     fn write_buf<B: Buf>(&mut self, buf: &mut B) -> Poll<usize, io::Error> {
