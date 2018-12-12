@@ -21,7 +21,9 @@ extern crate ipnet;
 #[cfg(target_os = "linux")]
 extern crate libc;
 #[macro_use]
-extern crate log;
+extern crate tokio_trace;
+extern crate tokio_trace_log;
+extern crate tokio_trace_futures;
 #[cfg_attr(test, macro_use)]
 extern crate indexmap;
 #[cfg(target_os = "linux")]

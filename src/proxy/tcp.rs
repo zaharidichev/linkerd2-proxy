@@ -35,10 +35,10 @@ where
     };
 
     let fwd = connect.connect()
-        .map_err(|e| info!("forward connect error: {:?}", e))
+        .map_err(|e| { info!("forward connect error: {:?}", e); })
         .and_then(move |io| {
             Duplex::new(server_io, io)
-                .map_err(|e| info!("forward duplex error: {}", e))
+                .map_err(|e| { info!("forward duplex error: {}", e); })
         });
 
     Either::B(fwd)

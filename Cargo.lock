@@ -563,6 +563,9 @@ dependencies = [
  "tokio-rustls 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-signal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
+ "tokio-trace-futures 0.0.1 (git+https://github.com/hawkw/tokio-trace-prototype)",
+ "tokio-trace-log 0.0.1 (git+https://github.com/hawkw/tokio-trace-prototype)",
  "tower-add-origin 0.1.0 (git+https://github.com/tower-rs/tower-http)",
  "tower-balance 0.1.0 (git+https://github.com/tower-rs/tower)",
  "tower-buffer 0.1.0 (git+https://github.com/tower-rs/tower)",
@@ -1300,6 +1303,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-trace"
+version = "0.1.0"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+dependencies = [
+ "tokio-trace-core 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
+]
+
+[[package]]
+name = "tokio-trace-core"
+version = "0.1.0"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+dependencies = [
+ "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "tokio-trace-futures"
+version = "0.0.1"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+dependencies = [
+ "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
+]
+
+[[package]]
+name = "tokio-trace-log"
+version = "0.0.1"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+dependencies = [
+ "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
+ "tokio-trace-subscriber 0.0.1 (git+https://github.com/hawkw/tokio-trace-prototype)",
+]
+
+[[package]]
+name = "tokio-trace-subscriber"
+version = "0.0.1"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+dependencies = [
+ "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
+]
+
+[[package]]
 name = "tokio-udp"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1782,6 +1828,11 @@ dependencies = [
 "checksum tokio-tcp 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ec9b094851aadd2caf83ba3ad8e8c4ce65a42104f7b94d9e6550023f0407853f"
 "checksum tokio-threadpool 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "b3c3873a6d8d0b636e024e77b9a82eaab6739578a06189ecd0e731c7308fbc5d"
 "checksum tokio-timer 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "3a52f00c97fedb6d535d27f65cccb7181c8dd4c6edc3eda9ea93f6d45d05168e"
+"checksum tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)" = "<none>"
+"checksum tokio-trace-core 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)" = "<none>"
+"checksum tokio-trace-futures 0.0.1 (git+https://github.com/hawkw/tokio-trace-prototype)" = "<none>"
+"checksum tokio-trace-log 0.0.1 (git+https://github.com/hawkw/tokio-trace-prototype)" = "<none>"
+"checksum tokio-trace-subscriber 0.0.1 (git+https://github.com/hawkw/tokio-trace-prototype)" = "<none>"
 "checksum tokio-udp 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "137bda266504893ac4774e0ec4c2108f7ccdbcb7ac8dced6305fe9e4e0b5041a"
 "checksum tower-add-origin 0.1.0 (git+https://github.com/tower-rs/tower-http)" = "<none>"
 "checksum tower-balance 0.1.0 (git+https://github.com/tower-rs/tower)" = "<none>"

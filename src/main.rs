@@ -7,6 +7,9 @@ extern crate linkerd2_proxy;
 #[macro_use] extern crate log;
 extern crate tokio;
 
+extern crate tokio_trace;
+extern crate tokio_trace_log;
+
 use std::process;
 
 mod signal;
