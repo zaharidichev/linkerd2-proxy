@@ -53,11 +53,11 @@ build: $(TARGET_BIN)
 
 .PHONY: test
 test: fetch
-	$(CARGO_TEST) --no-default-features
+	$(CARGO_TEST)
 
 .PHONY: test-flakey
 test-flakey:
-	$(CARGO_TEST)
+	$(CARGO_TEST) --features flaky_tests
 
 .PHONY: package
 package: $(PKG_ROOT)/$(PKG)

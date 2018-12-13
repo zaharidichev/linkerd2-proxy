@@ -18,8 +18,7 @@ authors = ["Oliver Gould <ver@buoyant.io>"]
 publish = false
 
 [features]
-default = ["flaky_tests"]
-# Disable to skip certain tests that should not be run on CI.
+# Enable to run tests that are sometimes flaky and are skipped on CI.
 flaky_tests = []
 
 [dependencies]
