@@ -70,20 +70,26 @@ impl Client {
     }
 
     pub fn get(&self, path: &str) -> String {
-        let mut req = self.request_builder(path);
-        let res = self.request(req.method("GET"));
-        assert_eq!(
-            res.status(),
-            StatusCode::OK,
-            "client.get({:?}) expects 200 OK, got \"{}\"",
-            path,
-            res.status(),
-        );
-        let stream = res.into_parts().1;
-        stream.concat2()
-            .map(|body| ::std::str::from_utf8(&body).unwrap().to_string())
+        self.get_async(path)
             .wait()
             .expect("get() wait body")
+    }
+
+    pub fn get_async(&self, path: &str) -> Box<Future<Item=String, Error=String> + Send> {
+        let mut req = self.request_builder(path);
+        let path = path.to_owned();
+        let f = self.request_async(req.method("GET"))
+            .and_then(move |res| if res.status() == StatusCode::OK {
+                let (_, stream) = res.into_parts();
+                future::Either::A(stream.concat2()
+                    .map(|body| ::std::str::from_utf8(&body).unwrap().to_string())
+                    .map_err(|e| format!("{}", e)))
+            } else {
+                let err = format!("client.get({:?}) expects 200 OK, got \"{}\"", path, res.status());
+                future::Either::B(future::err(err))
+            });
+
+        Box::new(f)
     }
 
     pub fn request_async(&self, builder: &mut http::request::Builder) -> Box<Future<Item=Response, Error=String> + Send> {

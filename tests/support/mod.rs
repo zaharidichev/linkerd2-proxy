@@ -18,6 +18,7 @@ extern crate prost;
 extern crate tokio;
 extern crate tokio_connect;
 pub extern crate tokio_io;
+extern crate tokio_timer;
 extern crate tower_grpc;
 extern crate tower_service;
 extern crate log;
@@ -31,7 +32,7 @@ pub use std::time::Duration;
 pub use self::bytes::Bytes;
 pub use self::linkerd2_proxy::*;
 pub use self::linkerd2_task::LazyExecutor;
-pub use self::futures::{future::Executor, *,};
+pub use self::futures::{future::Executor, *};
 pub use self::futures::sync::oneshot;
 pub use self::http::{HeaderMap, Request, Response, StatusCode};
 use self::tokio::{
@@ -141,6 +142,17 @@ macro_rules! assert_contains {
 macro_rules! assert_eventually_contains {
     ($scrape:expr, $contains:expr) => {
         assert_eventually!($scrape.contains($contains), "metrics scrape:\n{}\ndid not contain:\n{}", $scrape, $contains)
+    }
+}
+
+#[macro_export]
+macro_rules! eq_or_err {
+    ($value:expr, $expected:expr) => {
+        if $value == $expected {
+            Ok(())
+        } else {
+            Err(format!("expected '$expected'; got '$value'"))
+        }
     }
 }
 

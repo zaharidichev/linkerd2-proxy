@@ -243,7 +243,7 @@ where
                 .push(control::client::layer())
                 .push(control::resolve::layer(dns_resolver.clone()))
                 .push(reconnect::layer().with_fixed_backoff(config.control_backoff_delay))
-                .push(proxy::timeout::layer(config.control_connect_timeout))
+                .push(timeout::layer(config.control_request_timeout))
                 .push(http_metrics::layer::<_, classify::Response>(
                     ctl_http_metrics,
                 ))
@@ -305,7 +305,7 @@ where
                 // Establishes connections to remote peers (for both TCP
                 // forwarding and HTTP proxying).
                 let connect = connect::Stack::new()
-                    .push(proxy::timeout::layer(config.outbound_connect_timeout))
+                    .push(timeout::layer(config.outbound_connect_timeout))
                     .push(transport_metrics.connect("outbound"));
 
                 // Instantiates an HTTP client for for a `client::Config`
@@ -408,7 +408,6 @@ where
                 // address is used.
                 let addr_router = addr_stack
                     .push(buffer::layer())
-                    .push(timeout::layer(config.bind_timeout))
                     .push(limit::layer(MAX_IN_FLIGHT))
                     .push(router::layer(|req: &http::Request<_>| {
                         let addr = super::http_request_authority_addr(req)
@@ -458,7 +457,7 @@ where
                 // Establishes connections to the local application (for both
                 // TCP forwarding and HTTP proxying).
                 let connect = connect::Stack::new()
-                    .push(proxy::timeout::layer(config.inbound_connect_timeout))
+                    .push(timeout::layer(config.inbound_connect_timeout))
                     .push(transport_metrics.connect("inbound"))
                     .push(rewrite_loopback_addr::layer());
 

@@ -20,11 +20,13 @@ macro_rules! generate_outbound_dns_limit_test {
             env.put(app::config::ENV_DESTINATION_CLIENT_CONCURRENCY_LIMIT, "2".to_owned());
 
             let ctrl = controller::new();
+
+            // Hold resolutions open.
             let _txs = (1..=3).map(|n| {
-                let disco_n = format!("disco{}.test.svc.cluster.local", n);
-                let tx = ctrl.destination_tx(&disco_n);
+                let dst = format!("disco{}.test.svc.cluster.local", n);
+                let tx = ctrl.destination_tx(&dst);
                 tx.send_addr(srv_addr);
-                tx // This will go into a vec, to keep the stream open.
+                tx
             }).collect::<Vec<_>>();
 
             let proxy = proxy::new()
@@ -34,34 +36,33 @@ macro_rules! generate_outbound_dns_limit_test {
 
             // Make two requests that go through service discovery, to reach the
             // maximum number of Destination resolutions.
-            for n in 1..=2 {
+            let init = future::join_all((1..=2).map(|n| {
                 let route = format!("disco{}.test.svc.cluster.local", n);
                 let client = $make_client(proxy.outbound, route);
                 println!("trying {}th destination...", n);
-                assert_eq!(client.get("/"), "hello");
-            }
+                client.get_async("/").and_then(|v| eq_or_err!(v, "hello"))
+            })).map(|_| ());
 
             // The next request will fail, because we have reached the
             // Destination resolution limit, but we have _not_ reached the
             // route cache capacity, so we won't start evicting inactive
             // routes yet, and their Destination resolutions will remain
             // active.
-            let client = $make_client(proxy.outbound, "disco3.test.svc.cluster.local");
+            let dst3 = $make_client(proxy.outbound, "disco3.test.svc.cluster.local");
             println!("trying 3rd destination...");
-            let mut req = client.request_builder("/");
-            let rsp = client.request(req.method("GET"));
-            // The request should fail.
-            assert_eq!(rsp.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+            let rsp = dst3
+                .request_async(client.request_builder("/").method("GET"))
+                .map(|rsp| eq_or_err!(rsp.status(), http::StatusCode::INTERNAL_SERVER_ERROR))
 
             // However, a request for a DNS name that _doesn't_ go through the
             // Destination service should not be affected by the limit.
             // TODO: The controller should also assert the proxy doesn't make
             // requests when it has hit the maximum number of resolutions.
-            let client = $make_client(proxy.outbound, "httpbin.org");
+            let external = $make_client(proxy.outbound, "httpbin.org");
             println!("trying httpbin.org...");
-            let mut req = client.request_builder("/");
-            let rsp = client.request(req.method("GET"));
-            assert_eq!(rsp.status(), http::StatusCode::OK);
+            let rsp = external
+                .request_async(client.request_builder("/").method("GET"));
+                .map(|rsp| eq_or_err!(rsp.status(), http::StatusCode::OK));
         }
     }
 }

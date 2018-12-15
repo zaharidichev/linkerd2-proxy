@@ -88,11 +88,11 @@ pub struct Config {
     /// The maximum amount of time to wait for a connection to the controller.
     pub control_connect_timeout: Duration,
 
+    /// The maximum amount of time to wait for a response from the controller.
+    pub control_request_timeout: Duration,
+
     /// Age after which metrics may be dropped.
     pub metrics_retain_idle: Duration,
-
-    /// Timeout after which to cancel binding a request.
-    pub bind_timeout: Duration,
 
     pub namespaces: Namespaces,
 
@@ -491,10 +491,9 @@ impl<'a> TryFrom<&'a Strings> for Config {
             control_host_and_port,
             control_backoff_delay,
             control_connect_timeout,
+            control_request_timeout: bind_timeout?.unwrap_or(DEFAULT_BIND_TIMEOUT),
 
             metrics_retain_idle: metrics_retain_idle?.unwrap_or(DEFAULT_METRICS_RETAIN_IDLE),
-
-            bind_timeout: bind_timeout?.unwrap_or(DEFAULT_BIND_TIMEOUT),
 
             namespaces,
 
