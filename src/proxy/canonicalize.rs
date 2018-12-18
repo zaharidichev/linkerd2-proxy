@@ -156,6 +156,7 @@ impl Future for Task {
 
     fn poll(&mut self) -> Poll<(), ()> {
         loop {
+            let original_name = self.original.name();
             self.state = match self.state {
                 State::Init => {
                     let f = self.resolver.refine(self.original.name());
@@ -183,7 +184,7 @@ impl Future for Task {
                             State::ValidUntil(Delay::new(refine.valid_until))
                         }
                         Err(e) => {
-                            error!("failed to refine {}: {}", self.original.name(), e);
+                            error!("failed to refine {}: {}", original_name, e);
                             if self.resolved.is_none() {
                                 let err = self.tx.try_send(self.original.clone()).err();
                                 if err.map(|e| e.is_disconnected()).unwrap_or(false) {

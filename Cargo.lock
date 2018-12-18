@@ -632,6 +632,8 @@ dependencies = [
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
+ "tokio-trace-futures 0.0.1 (git+https://github.com/hawkw/tokio-trace-prototype)",
 ]
 
 [[package]]
@@ -1305,7 +1307,7 @@ dependencies = [
 [[package]]
 name = "tokio-trace"
 version = "0.1.0"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#9eee6880c1b2ec588bde9724692be85e7e667fa8"
 dependencies = [
  "tokio-trace-core 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
 ]
@@ -1313,7 +1315,7 @@ dependencies = [
 [[package]]
 name = "tokio-trace-core"
 version = "0.1.0"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#9eee6880c1b2ec588bde9724692be85e7e667fa8"
 dependencies = [
  "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1321,16 +1323,17 @@ dependencies = [
 [[package]]
 name = "tokio-trace-futures"
 version = "0.0.1"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#9eee6880c1b2ec588bde9724692be85e7e667fa8"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
 ]
 
 [[package]]
 name = "tokio-trace-log"
 version = "0.0.1"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#9eee6880c1b2ec588bde9724692be85e7e667fa8"
 dependencies = [
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
@@ -1340,7 +1343,7 @@ dependencies = [
 [[package]]
 name = "tokio-trace-subscriber"
 version = "0.0.1"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#9eee6880c1b2ec588bde9724692be85e7e667fa8"
 dependencies = [
  "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
 ]

@@ -171,9 +171,10 @@ where
             .with_span_entry(true)
             .with_span_exits(true)
             .finish();
-        let mut runtime = runtime.with_subscriber(subscriber.clone());
+        let subscriber = tokio_trace::Dispatch::new(subscriber);
+        let mut runtime = runtime.with_dispatch(subscriber.clone());
 
-        tokio_trace::subscriber::with_default(subscriber.clone(), || {
+        tokio_trace::dispatcher::with_default(subscriber.clone(), || {
             info!("using controller at {:?}", control_host_and_port);
             info!("routing on {:?}", outbound_listener.local_addr());
             info!(

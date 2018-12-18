@@ -4,6 +4,8 @@ extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate tokio;
+extern crate tokio_trace;
+extern crate tokio_trace_futures;
 
 use futures::future::{
     Future,
@@ -11,6 +13,7 @@ use futures::future::{
     ExecuteErrorKind,
 };
 pub use futures::future::Executor;
+use tokio_trace_futures::WithDispatch;
 
 use tokio::{
     executor::{
@@ -66,7 +69,12 @@ pub struct ArcExecutor(Arc<Executor<BoxSendFuture> + Send + Sync>);
 /// This allows the runtime used for the proxy to be customized based
 /// on the application: for a sidecar proxy, we use the current thread
 /// runtime, but for an ingress proxy, we would prefer the thread pool.
-pub enum MainRuntime {
+pub struct MainRuntime {
+    inner: RuntimeKind,
+    dispatch: Option<tokio_trace::Dispatch>,
+}
+
+enum RuntimeKind {
     CurrentThread(current_thread::Runtime),
     ThreadPool(thread_pool::Runtime),
 }
@@ -224,14 +232,32 @@ impl fmt::Debug for ArcExecutor {
 // ===== impl MainRuntime =====
 
 impl MainRuntime {
+    fn new(inner: RuntimeKind) -> Self {
+        Self {
+            inner,
+            dispatch: None,
+        }
+    }
+
+    pub fn with_dispatch(self, dispatch: tokio_trace::Dispatch) -> Self {
+        Self {
+            dispatch: Some(dispatch),
+            ..self
+        }
+    }
+
     /// Spawn a task on this runtime.
     pub fn spawn<F>(&mut self, future: F) -> &mut Self
     where
         F: Future<Item = (), Error = ()> + Send + 'static,
     {
-        match *self {
-            MainRuntime::CurrentThread(ref mut rt) => { rt.spawn(future); }
-            MainRuntime::ThreadPool(ref mut rt) => {  rt.spawn(future); }
+        use tokio_trace_futures::WithSubscriber;
+        let dispatch = self.dispatch.clone()
+            .unwrap_or_else(|| tokio_trace::Dispatch::none());
+        let future = future.with_subscriber(dispatch);
+        match self.inner {
+            RuntimeKind::CurrentThread(ref mut rt) => { rt.spawn(future); }
+            RuntimeKind::ThreadPool(ref mut rt) => {  rt.spawn(future); }
         };
         self
     }
@@ -241,10 +267,10 @@ impl MainRuntime {
     where
         F: Future<Item = (), Error = ()> + Send + 'static,
     {
-        match self {
-            MainRuntime::CurrentThread(mut rt) =>
+        match self.inner {
+            RuntimeKind::CurrentThread(mut rt) =>
                 rt.block_on(shutdown_signal),
-            MainRuntime::ThreadPool(rt) =>
+            RuntimeKind::ThreadPool(rt) =>
                 shutdown_signal
                     .and_then(move |()| rt.shutdown_now())
                     .wait(),
@@ -255,14 +281,14 @@ impl MainRuntime {
 impl From<current_thread::Runtime> for MainRuntime {
     fn from(rt: current_thread::Runtime) -> Self {
         debug!("creating single-threaded proxy");
-        MainRuntime::CurrentThread(rt)
+        Self::new(RuntimeKind::CurrentThread(rt))
     }
 }
 
 impl From<thread_pool::Runtime> for MainRuntime {
     fn from(rt: thread_pool::Runtime) -> Self {
         debug!("creating proxy with threadpool");
-        MainRuntime::ThreadPool(rt)
+        Self::new(RuntimeKind::ThreadPool(rt))
     }
 }
 

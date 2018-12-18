@@ -1,14 +1,14 @@
 use std::cell::RefCell;
-use std::env;
-use std::io::Write;
+// use std::env;
+// use std::io::Write;
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use env_logger;
+// use env_logger;
 use futures::{Future, Poll};
 use futures::future::{ExecuteError, Executor};
-use log::{Level};
+// use log::{Level};
 
 const ENV_LOG: &str = "LINKERD2_PROXY_LOG";
 
@@ -17,28 +17,28 @@ thread_local! {
 }
 
 pub fn init() {
-    env_logger::Builder::new()
-        .format(|fmt, record| {
-            CONTEXT.with(|ctxt| {
-                let level = match record.level() {
-                    Level::Trace => "TRCE",
-                    Level::Debug => "DBUG",
-                    Level::Info => "INFO",
-                    Level::Warn => "WARN",
-                    Level::Error => "ERR!",
-                };
-                writeln!(
-                   fmt,
-                    "{} {}{} {}",
-                    level,
-                    Context(&ctxt.borrow()),
-                    record.target(),
-                    record.args()
-                )
-            })
-        })
-        .parse(&env::var(ENV_LOG).unwrap_or_default())
-        .init();
+    // env_logger::Builder::new()
+    //     .format(|fmt, record| {
+    //         CONTEXT.with(|ctxt| {
+    //             let level = match record.level() {
+    //                 Level::Trace => "TRCE",
+    //                 Level::Debug => "DBUG",
+    //                 Level::Info => "INFO",
+    //                 Level::Warn => "WARN",
+    //                 Level::Error => "ERR!",
+    //             };
+    //             writeln!(
+    //                fmt,
+    //                 "{} {}{} {}",
+    //                 level,
+    //                 Context(&ctxt.borrow()),
+    //                 record.target(),
+    //                 record.args()
+    //             )
+    //         })
+    //     })
+    //     .parse(&env::var(ENV_LOG).unwrap_or_default())
+    //     .init();
 }
 
 /// Execute a closure with a `Display` item attached to allow log messages.
