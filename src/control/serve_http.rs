@@ -25,7 +25,7 @@ where
                     .map_err(move |e| {
                         error!("error serving {}: {:?}", name, e);
                     })
-                    .instrument(span!("serve_connection", remote_addr = ::tokio_trace::field::debug(conn.remote_addr())));
+                    .instrument(span!("serve_connection", remote_addr = ::tokio_trace::field::debug(remote)));
 
                 let r = TaskExecutor::current()
                     .spawn_local(Box::new(serve))

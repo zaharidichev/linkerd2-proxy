@@ -1305,7 +1305,7 @@ dependencies = [
 [[package]]
 name = "tokio-trace"
 version = "0.1.0"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
 dependencies = [
  "tokio-trace-core 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
 ]
@@ -1313,7 +1313,7 @@ dependencies = [
 [[package]]
 name = "tokio-trace-core"
 version = "0.1.0"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
 dependencies = [
  "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1321,7 +1321,7 @@ dependencies = [
 [[package]]
 name = "tokio-trace-futures"
 version = "0.0.1"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
@@ -1330,7 +1330,7 @@ dependencies = [
 [[package]]
 name = "tokio-trace-log"
 version = "0.0.1"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
 dependencies = [
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
@@ -1340,7 +1340,7 @@ dependencies = [
 [[package]]
 name = "tokio-trace-subscriber"
 version = "0.0.1"
-source = "git+https://github.com/hawkw/tokio-trace-prototype#6dcc482d6fab33c5d1a4ffcd7dff2b193aa15f39"
+source = "git+https://github.com/hawkw/tokio-trace-prototype#294723fbb94b9ca067dd06a1c54b8284a20680ea"
 dependencies = [
  "tokio-trace 0.1.0 (git+https://github.com/hawkw/tokio-trace-prototype)",
 ]
