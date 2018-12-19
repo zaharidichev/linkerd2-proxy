@@ -54,15 +54,12 @@ impl Line {
 
     fn record(&mut self, key: &field::Field, value: &fmt::Debug) -> fmt::Result {
         use std::fmt::Write;
-        if key.name() == Some("message") {
-            write!(&mut self.message, "{:?}", value)
-        } else {
-            write!(
-                &mut self.fields,
-                "{}={:?} ",
-                key.name().unwrap_or("???"),
-                value
-            )
+        let name = key.name();
+        match name {
+            Some("message") => write!(&mut self.message, "{:?}", value),
+            Some(name) if name.starts_with('_') => write!(&mut self.fields, "{:?} ", value),
+            Some(name) => write!(&mut self.fields, "{}={:?} ", name, value),
+            None => write!(&mut self.fields, "{:?} ", value),
         }
     }
 }
@@ -132,7 +129,7 @@ impl Subscriber for LogSubscriber {
                         l if l == &Level::ERROR => "ERR!",
                         _ => "",
                     };
-                    write!(&mut stdout, " {}", level)?;
+                    write!(&mut stdout, "{} ", level)?;
                     CONTEXT.with(|ctx| -> Result<(), io::Error> {
                         for id in ctx.borrow().iter() {
                             if let Some(line) = in_progress.get(id).as_ref() {
@@ -141,7 +138,7 @@ impl Subscriber for LogSubscriber {
                         }
                         Ok(())
                     })?;
-                    writeln!(&mut stdout, "{} {} {}", line.fields, line.target, line.message)?;
+                    writeln!(&mut stdout, "{}{} {}", line.fields, line.target, line.message)?;
                     Ok(())
                 };
 
@@ -158,11 +155,11 @@ impl Subscriber for LogSubscriber {
 
 pub fn init() -> LogSubscriber {
     // TODO: better glue
-    let _ = env_logger::Builder::from_env(
-            env_logger::Env::new().filter(ENV_LOG)
-        )
-        .format(|_, record| tokio_trace_log::format_trace(record))
-        .try_init();
+    // let _ = env_logger::Builder::from_env(
+    //         env_logger::Env::new().filter(ENV_LOG)
+    //     )
+    //     .format(|_, record| tokio_trace_log::format_trace(record))
+    //     .try_init();
     LogSubscriber {
         in_progress: Mutex::new(HashMap::new()),
         next_id: AtomicUsize::new(0),

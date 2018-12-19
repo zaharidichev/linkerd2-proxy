@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime};
 use std::{error, fmt, io};
 use tokio::executor::{self, DefaultExecutor, Executor};
 use tokio::runtime::current_thread;
+use tokio_trace::field;
 use tokio_trace_futures::{WithSubscriber, Instrument};
 use tower_h2;
 
@@ -597,36 +598,39 @@ where
                 thread::Builder::new()
                     .name("admin".into())
                     .spawn(move || {
-                        use api::tap::server::TapServer;
+                        let mut span = span!("admin", section = field::display("admin"));
+                        span.enter(|| {
+                            use api::tap::server::TapServer;
 
-                        let mut rt =
-                            current_thread::Runtime::new().expect("initialize admin thread runtime")
-                                .with_subscriber(subscriber.clone());
+                            let mut rt =
+                                current_thread::Runtime::new().expect("initialize admin thread runtime")
+                                    .with_subscriber(subscriber.clone());
 
-                        let metrics = control::serve_http(
-                            "metrics",
-                            metrics_listener,
-                            metrics::Serve::new(report),
-                        );
+                            let metrics = control::serve_http(
+                                "metrics",
+                                metrics_listener,
+                                metrics::Serve::new(report),
+                            );
 
-                        rt.spawn(tap_daemon.map_err(|_| ()));
-                        rt.spawn(serve_tap(control_listener, TapServer::new(tap_grpc)));
+                            rt.spawn(tap_daemon.map_err(|_| ()));
+                            rt.spawn(serve_tap(control_listener, TapServer::new(tap_grpc)));
 
-                        rt.spawn(metrics);
+                            rt.spawn(metrics);
 
-                        rt.spawn(::logging::admin().bg("dns-resolver").future(dns_bg));
+                            rt.spawn(dns_bg.instrument(span!("dns-resolver", bg = field::display("dns-resolver"))));
 
-                        rt.spawn(
-                            ::logging::admin()
-                                .bg("resolver")
-                                .future(resolver_bg_rx.map_err(|_| {}).flatten()),
-                        );
+                            rt.spawn(
+                                resolver_bg_rx
+                                    .map_err(|_| {}).flatten()
+                                    .instrument(span!("resolver", bg = field::display("resolver")))
+                            );
 
-                        rt.spawn(::logging::admin().bg("tls-config").future(tls_cfg_bg));
+                            rt.spawn(tls_cfg_bg.instrument(span!("tls_cfg", bg = field::display("tls_cfg"))));
 
-                        let shutdown = admin_shutdown_signal.then(|_| Ok::<(), ()>(()));
-                        rt.block_on(shutdown).expect("admin");
-                        trace!("admin shutdown finished");
+                            let shutdown = admin_shutdown_signal.then(|_| Ok::<(), ()>(()));
+                            rt.block_on(shutdown).expect("admin");
+                            trace!("admin shutdown finished");
+                        })
                     })
                     .expect("initialize controller api thread");
                 trace!("controller client thread spawned");
@@ -685,29 +689,29 @@ where
         disable_protocol_detection_ports,
         drain_rx.clone(),
     );
-    let log = server.log().clone();
+    span!("serve", listen = field::display(listen_addr), _server = field::display(server.log())).enter(|| {
+        let accept = {
+            let fut = bound_port.listen_and_fold((), move |(), (connection, remote_addr)| {
+                let s = server.serve(connection, remote_addr);
+                // Logging context is configured by the server.
+                let r = DefaultExecutor::current()
+                    .spawn(Box::new(s))
+                    .map_err(task::Error::into_io);
+                future::result(r)
+            });
+            fut
+        };
 
-    let accept = {
-        let fut = bound_port.listen_and_fold((), move |(), (connection, remote_addr)| {
-            let s = server.serve(connection, remote_addr);
-            // Logging context is configured by the server.
-            let r = DefaultExecutor::current()
-                .spawn(Box::new(s))
-                .map_err(task::Error::into_io);
-            future::result(r)
-        });
-        log.future(fut)
-    };
+        let accept_until = Cancelable {
+            future: accept,
+            canceled: false,
+        };
 
-    let accept_until = Cancelable {
-        future: accept,
-        canceled: false,
-    };
-
-    // As soon as we get a shutdown signal, the listener
-    // is canceled immediately.
-    drain_rx.watch(accept_until, |accept| {
-        accept.canceled = true;
+        // As soon as we get a shutdown signal, the listener
+        // is canceled immediately.
+        drain_rx.watch(accept_until, |accept| {
+            accept.canceled = true;
+        })
     })
 }
 
