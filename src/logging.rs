@@ -67,40 +67,6 @@ impl Line {
     }
 }
 
-impl LogSubscriber {
-    fn write_context(&self, mut writer: impl io::Write) -> Result<(), io::Error> {
-        use std::io::Write;
-        let in_progress = self.in_progress.lock().unwrap();
-        let mut result = String::new();
-        CONTEXT.with(move |ctx| {
-            for id in ctx.borrow().iter() {
-                if let Some(ref line) = in_progress.get(id) {
-                    write!(&mut writer, "{}", line.fields)?;
-                }
-            }
-            Ok(())
-        })
-    }
-
-    fn finish(&self, line: Line) -> Result<(), io::Error> {
-        use std::io::Write;
-        let stdout = io::stdout();
-        let mut stdout = stdout.lock();
-        let level = match &line.level {
-            l if l == &Level::TRACE => "TRCE",
-            l if l == &Level::DEBUG => "DBUG",
-            l if l == &Level::INFO => "INFO",
-            l if l == &Level::WARN => "WARN",
-            l if l == &Level::ERROR => "ERR!",
-            _ => "",
-        };
-        write!(&mut stdout, " {}", level)?;
-        self.write_context(&mut stdout)?;
-        writeln!(&mut stdout, "{} {} {}", line.fields, line.target, line.message)?;
-        Ok(())
-    }
-}
-
 impl Subscriber for LogSubscriber {
     fn enabled(&self, metadata: &Metadata) -> bool {
         true
@@ -153,7 +119,33 @@ impl Subscriber for LogSubscriber {
         if in_progress.contains_key(&id) {
             if in_progress.get(&id).unwrap().ref_count == 1 {
                 let span = in_progress.remove(&id).unwrap();
-                if let Err(error) = self.finish(span) {
+
+                let finish = move |line: Line| -> Result<(), io::Error> {
+                    use std::io::Write;
+                    let stdout = io::stdout();
+                    let mut stdout = stdout.lock();
+                    let level = match &line.level {
+                        l if l == &Level::TRACE => "TRCE",
+                        l if l == &Level::DEBUG => "DBUG",
+                        l if l == &Level::INFO => "INFO",
+                        l if l == &Level::WARN => "WARN",
+                        l if l == &Level::ERROR => "ERR!",
+                        _ => "",
+                    };
+                    write!(&mut stdout, " {}", level)?;
+                    CONTEXT.with(|ctx| -> Result<(), io::Error> {
+                        for id in ctx.borrow().iter() {
+                            if let Some(line) = in_progress.get(id).as_ref() {
+                                write!(&mut stdout, "{}", line.fields)?;
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    writeln!(&mut stdout, "{} {} {}", line.fields, line.target, line.message)?;
+                    Ok(())
+                };
+
+                if let Err(error) = finish(span) {
                     eprintln!("error writing {:?}: {:?}", id, error);
                 }
             } else {
