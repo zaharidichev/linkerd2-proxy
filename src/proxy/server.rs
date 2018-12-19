@@ -4,6 +4,9 @@ use hyper;
 use indexmap::IndexSet;
 use std::{error, fmt};
 use std::net::SocketAddr;
+use tokio_trace::field;
+use tokio_trace_futures::Instrument;
+use tokio::executor::DefaultExecutor;
 
 use Conditional;
 use drain;
@@ -238,109 +241,113 @@ where
     pub fn serve(&self, connection: Connection, remote_addr: SocketAddr)
         -> impl Future<Item=(), Error=()>
     {
-        let orig_dst = connection.original_dst_addr(&self.get_orig_dst);
+        let tls_status = connection.tls_status();
+        let mut span = span!(
+            "serve",
+            remote = field::display(remote_addr),
+            tls = field::display(tls_status)
+        );
 
-        let log = self.log.clone()
-            .with_remote(remote_addr);
+        let f = span.enter(|| {
+            let orig_dst = connection.original_dst_addr(&self.get_orig_dst);
+            let source = Source {
+                remote: remote_addr,
+                local: connection.local_addr().unwrap_or(self.listen_addr),
+                orig_dst,
+                tls_status,
+                _p: (),
+            };
 
-        let source = Source {
-            remote: remote_addr,
-            local: connection.local_addr().unwrap_or(self.listen_addr),
-            orig_dst,
-            tls_status: connection.tls_status(),
-            _p: (),
-        };
+            let io = match self.accept.make(&source) {
+                Ok(accept) => accept.accept(connection),
+                // Matching never allows LLVM to eliminate this entirely.
+                Err(never) => match never {},
+            };
 
-        let io = match self.accept.make(&source) {
-            Ok(accept) => accept.accept(connection),
-            // Matching never allows LLVM to eliminate this entirely.
-            Err(never) => match never {},
-        };
+            // We are using the port from the connection's SO_ORIGINAL_DST to
+            // determine whether to skip protocol detection, not any port that
+            // would be found after doing discovery.
+            let disable_protocol_detection = orig_dst
+                .map(|addr| {
+                    self.disable_protocol_detection_ports.contains(&addr.port())
+                })
+                .unwrap_or(false);
 
-        // We are using the port from the connection's SO_ORIGINAL_DST to
-        // determine whether to skip protocol detection, not any port that
-        // would be found after doing discovery.
-        let disable_protocol_detection = orig_dst
-            .map(|addr| {
-                self.disable_protocol_detection_ports.contains(&addr.port())
-            })
-            .unwrap_or(false);
+            if disable_protocol_detection {
+                trace!("protocol detection disabled for {:?}", orig_dst);
+                let fwd = tcp::forward(io, &self.connect, &source);
+                let fut = self.drain_signal.clone().watch(fwd, |_| {});
+                return Either::B(fut);
+            }
 
-        if disable_protocol_detection {
-            trace!("protocol detection disabled for {:?}", orig_dst);
-            let fwd = tcp::forward(io, &self.connect, &source);
-            let fut = self.drain_signal.clone().watch(fwd, |_| {});
-            return log.future(Either::B(fut));
-        }
+            let detect_protocol = io.peek()
+                .map_err(|e| debug!("peek error: {}", e))
+                .map(|io| {
+                    let p = Protocol::detect(io.peeked());
+                    (p, io)
+                });
 
-        let detect_protocol = io.peek()
-            .map_err(|e| debug!("peek error: {}", e))
-            .map(|io| {
-                let p = Protocol::detect(io.peeked());
-                (p, io)
-            });
-
-        let http = self.http.clone();
-        let route = self.route.clone();
-        let connect = self.connect.clone();
-        let drain_signal = self.drain_signal.clone();
-        let log_clone = log.clone();
-        let serve = detect_protocol
-            .and_then(move |(proto, io)| match proto {
-                None => Either::A({
-                    trace!("did not detect protocol; forwarding TCP");
-                    let fwd = tcp::forward(io, &connect, &source);
-                    drain_signal.watch(fwd, |_| {})
-                }),
-
-                Some(proto) => Either::B(match proto {
-                    Protocol::Http1 => Either::A({
-                        trace!("detected HTTP/1");
-                        match route.make(&source) {
-                            Err(never) => match never {},
-                            Ok(s) => {
-                                let svc = HyperServerSvc::new(
-                                    s,
-                                    drain_signal.clone(),
-                                    log_clone.executor(),
-                                );
-                                // Enable support for HTTP upgrades (CONNECT and websockets).
-                                let conn = http
-                                    .serve_connection(io, svc)
-                                    .with_upgrades();
-                                drain_signal
-                                    .watch(conn, |conn| {
-                                        conn.graceful_shutdown();
-                                    })
-                                    .map(|_| ())
-                                    .map_err(|e| trace!("http1 server error: {:?}", e))
-                            },
-                        }
+            let http = self.http.clone();
+            let route = self.route.clone();
+            let connect = self.connect.clone();
+            let drain_signal = self.drain_signal.clone();
+            let serve = detect_protocol
+                .and_then(move |(proto, io)| match proto {
+                    None => Either::A({
+                        trace!("did not detect protocol; forwarding TCP");
+                        let fwd = tcp::forward(io, &connect, &source);
+                        drain_signal.watch(fwd, |_| {})
                     }),
-                    Protocol::Http2 => Either::B({
-                        trace!("detected HTTP/2");
-                        match route.make(&source) {
-                            Err(never) => match never {},
-                            Ok(s) => {
-                                let svc = HyperServerSvc::new(
-                                    s,
-                                    drain_signal.clone(),
-                                    log_clone.executor(),
-                                );
-                                let conn = http
-                                    .serve_connection(io, svc);
-                                drain_signal
-                                    .watch(conn, |conn| {
-                                        conn.graceful_shutdown();
-                                    })
-                                    .map(|_| ())
-                                    .map_err(|e| trace!("http2 server error: {:?}", e))
-                            },
-                        }
-                    }),
-                }),
-            });
 
-        log.future(Either::A(serve))
+                    Some(proto) => Either::B(match proto {
+                        Protocol::Http1 => Either::A({
+                            trace!("detected HTTP/1");
+                            match route.make(&source) {
+                                Err(never) => match never {},
+                                Ok(s) => {
+                                    let svc = HyperServerSvc::new(
+                                        s,
+                                        drain_signal.clone(),
+                                        DefaultExecutor::current(),
+                                    );
+                                    // Enable support for HTTP upgrades (CONNECT and websockets).
+                                    let conn = http
+                                        .serve_connection(io, svc)
+                                        .with_upgrades();
+                                    drain_signal
+                                        .watch(conn, |conn| {
+                                            conn.graceful_shutdown();
+                                        })
+                                        .map(|_| ())
+                                        .map_err(|e| trace!("http1 server error: {:?}", e))
+                                },
+                            }
+                        }),
+                        Protocol::Http2 => Either::B({
+                            trace!("detected HTTP/2");
+                            match route.make(&source) {
+                                Err(never) => match never {},
+                                Ok(s) => {
+                                    let svc = HyperServerSvc::new(
+                                        s,
+                                        drain_signal.clone(),
+                                        DefaultExecutor::current(),
+                                    );
+                                    let conn = http
+                                        .serve_connection(io, svc);
+                                    drain_signal
+                                        .watch(conn, |conn| {
+                                            conn.graceful_shutdown();
+                                        })
+                                        .map(|_| ())
+                                        .map_err(|e| trace!("http2 server error: {:?}", e))
+                                },
+                            }
+                        }),
+                    }),
+                });
+            Either::A(serve)
+        });
+        f.instrument(span)
     }
 }

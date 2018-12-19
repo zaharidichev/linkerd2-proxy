@@ -590,7 +590,9 @@ where
                     .map_err(|e| error!("inbound proxy background task failed: {}", e))
                 };
 
-                inbound.join(outbound).map(|_| {})
+                inbound.join(outbound)
+                    .map(|_| {})
+                    .instrument(span!("proxy", section = field::display("proxy")))
             });
 
             let (_tx, admin_shutdown_signal) = futures::sync::oneshot::channel::<()>();
@@ -689,7 +691,12 @@ where
         disable_protocol_detection_ports,
         drain_rx.clone(),
     );
-    span!("serve", listen = field::display(listen_addr), _server = field::display(server.log())).enter(|| {
+    let mut span = span!(
+        "serve",
+        server = field::display(proxy_name),
+        listen = field::display(listen_addr)
+    );
+    span.clone().enter(move || {
         let accept = {
             let fut = bound_port.listen_and_fold((), move |(), (connection, remote_addr)| {
                 let s = server.serve(connection, remote_addr);
@@ -711,7 +718,7 @@ where
         // is canceled immediately.
         drain_rx.watch(accept_until, |accept| {
             accept.canceled = true;
-        })
+        }).instrument(span)
     })
 }
 

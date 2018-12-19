@@ -57,7 +57,8 @@ impl Line {
         let name = key.name();
         match name {
             Some("message") => write!(&mut self.message, "{:?}", value),
-            Some(name) if name.starts_with('_') => write!(&mut self.fields, "{:?} ", value),
+            // TODO: should we be special-casing this?
+            Some("section") => write!(&mut self.fields, "{:?} ", value),
             Some(name) => write!(&mut self.fields, "{}={:?} ", name, value),
             None => write!(&mut self.fields, "{:?} ", value),
         }
@@ -66,7 +67,12 @@ impl Line {
 
 impl Subscriber for LogSubscriber {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        true
+        // WORK IN PROGRESS ---- REMOVE BEFORE FLIGHT
+        if metadata.fields().iter().any(|f| f.name() == Some("message")) {
+            metadata.level() <= &tokio_trace::Level::DEBUG
+        } else {
+            true
+        }
     }
 
     fn new_span(&self, metadata: &Metadata) -> Id {
@@ -116,6 +122,9 @@ impl Subscriber for LogSubscriber {
         if in_progress.contains_key(&id) {
             if in_progress.get(&id).unwrap().ref_count == 1 {
                 let span = in_progress.remove(&id).unwrap();
+                if span.message == "" {
+                    return;
+                }
 
                 let finish = move |line: Line| -> Result<(), io::Error> {
                     use std::io::Write;
@@ -138,8 +147,13 @@ impl Subscriber for LogSubscriber {
                         }
                         Ok(())
                     })?;
-                    writeln!(&mut stdout, "{}{} {}", line.fields, line.target, line.message)?;
-                    Ok(())
+                    writeln!(
+                        &mut stdout,
+                        "{}{} {}",
+                        line.fields,
+                        line.target,
+                        line.message,
+                    )
                 };
 
                 if let Err(error) = finish(span) {
@@ -148,7 +162,6 @@ impl Subscriber for LogSubscriber {
             } else {
                 in_progress.get_mut(&id).unwrap().ref_count -= 1;
             }
-            return;
         }
     }
 }
