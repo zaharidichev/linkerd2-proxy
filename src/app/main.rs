@@ -166,11 +166,7 @@ where
         const MAX_IN_FLIGHT: usize = 10_000;
         let control_host_and_port = config.control_host_and_port.clone();
 
-        let subscriber = tokio_trace_log::TraceLogger::builder()
-            .with_parent_fields(true)
-            .with_span_entry(true)
-            .with_span_exits(true)
-            .finish();
+        let subscriber = logging::init();
         let subscriber = tokio_trace::Dispatch::new(subscriber);
         let mut runtime = runtime.with_dispatch(subscriber.clone());
 

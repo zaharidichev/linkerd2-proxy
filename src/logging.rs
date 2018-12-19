@@ -1,22 +1,180 @@
 use std::cell::RefCell;
 // use std::env;
-// use std::io::Write;
+use std::io;
 use std::fmt;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, atomic::{AtomicUsize, Ordering}};
+use std::collections::HashMap;
 
 // use env_logger;
 use futures::{Future, Poll};
 use futures::future::{ExecuteError, Executor};
 // use log::{Level};
+use tokio_trace::{
+    Level,
+    field,
+    Metadata,
+    span::Id,
+    subscriber::{self, Subscriber},
+};
 
 const ENV_LOG: &str = "LINKERD2_PROXY_LOG";
 
 thread_local! {
-    static CONTEXT: RefCell<Vec<*const fmt::Display>> = RefCell::new(Vec::new());
+    static CONTEXT: RefCell<Vec<Id>> = RefCell::new(Vec::new());
 }
 
-pub fn init() {
+pub struct LogSubscriber {
+    // RwLock will eventually be used to allow dynamic loglevel changes...
+    // filter: RwLock<env_logger::Filter>,
+
+    // TODO: replace hash map with a smarter storage (we can use IDs as arena indexes...)
+    in_progress: Mutex<HashMap<Id, Line>>,
+    next_id: AtomicUsize,
+}
+
+struct Line {
+    ref_count: usize,
+    target: String,
+    level: tokio_trace::Level,
+    fields: String,
+    message: String,
+}
+
+impl Line {
+    fn new(meta: &Metadata) -> Self {
+        Self {
+            ref_count: 1,
+            target: String::from(meta.target()),
+            level: meta.level().clone(),
+            fields: String::new(),
+            message: String::new(),
+        }
+    }
+
+    fn record(&mut self, key: &field::Field, value: &fmt::Debug) -> fmt::Result {
+        use std::fmt::Write;
+        if key.name() == Some("message") {
+            write!(&mut self.message, "{:?}", value)
+        } else {
+            write!(
+                &mut self.fields,
+                "{}={:?} ",
+                key.name().unwrap_or("???"),
+                value
+            )
+        }
+    }
+}
+
+impl LogSubscriber {
+    fn write_context(&self, mut writer: impl io::Write) -> Result<(), io::Error> {
+        use std::io::Write;
+        let in_progress = self.in_progress.lock().unwrap();
+        let mut result = String::new();
+        CONTEXT.with(move |ctx| {
+            for id in ctx.borrow().iter() {
+                if let Some(ref line) = in_progress.get(id) {
+                    write!(&mut writer, "{}", line.fields)?;
+                }
+            }
+            Ok(())
+        })
+    }
+
+    fn finish(&self, line: Line) -> Result<(), io::Error> {
+        use std::io::Write;
+        let stdout = io::stdout();
+        let mut stdout = stdout.lock();
+        let level = match &line.level {
+            l if l == &Level::TRACE => "TRCE",
+            l if l == &Level::DEBUG => "DBUG",
+            l if l == &Level::INFO => "INFO",
+            l if l == &Level::WARN => "WARN",
+            l if l == &Level::ERROR => "ERR!",
+            _ => "",
+        };
+        write!(&mut stdout, " {}", level)?;
+        self.write_context(&mut stdout)?;
+        writeln!(&mut stdout, "{} {} {}", line.fields, line.target, line.message)?;
+        Ok(())
+    }
+}
+
+impl Subscriber for LogSubscriber {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        true
+    }
+
+    fn new_span(&self, metadata: &Metadata) -> Id {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = Id::from_u64(id as u64);
+        let mut in_progress = self.in_progress.lock().unwrap();
+        in_progress.insert(id.clone(), Line::new(metadata));
+        id
+    }
+
+    fn record_debug(&self, span: &Id, key: &field::Field, value: &fmt::Debug) {
+        let mut in_progress = self.in_progress.lock().unwrap();
+        if let Some(span) = in_progress.get_mut(span) {
+            if let Err(_e) = span.record(key, value) {
+                eprintln!("error formatting span");
+            }
+            return;
+        }
+    }
+
+    fn add_follows_from(&self, span: &Id, follows: Id) {
+        // TODO: this should eventually track the relationship?
+    }
+
+    fn enter(&self, id: &Id) {
+        CONTEXT.with(|ctx| {
+            ctx.borrow_mut().push(id.clone())
+        });
+    }
+
+    fn exit(&self, id: &Id) {
+        CONTEXT.with(|ctx| {
+            ctx.borrow_mut().pop()
+        });
+    }
+
+    fn clone_span(&self, id: &Id) -> Id {
+        let mut in_progress = self.in_progress.lock().unwrap();
+        if let Some(span) = in_progress.get_mut(id) {
+            span.ref_count += 1;
+        }
+        id.clone()
+    }
+
+    fn drop_span(&self, id: Id) {
+        let mut in_progress = self.in_progress.lock().unwrap();
+        if in_progress.contains_key(&id) {
+            if in_progress.get(&id).unwrap().ref_count == 1 {
+                let span = in_progress.remove(&id).unwrap();
+                if let Err(error) = self.finish(span) {
+                    eprintln!("error writing {:?}: {:?}", id, error);
+                }
+            } else {
+                in_progress.get_mut(&id).unwrap().ref_count -= 1;
+            }
+            return;
+        }
+    }
+}
+
+pub fn init() -> LogSubscriber {
+    // TODO: better glue
+    let _ = env_logger::Builder::from_env(
+            env_logger::Env::new().filter(ENV_LOG)
+        )
+        .format(|_, record| tokio_trace_log::format_trace(record))
+        .try_init();
+    LogSubscriber {
+        in_progress: Mutex::new(HashMap::new()),
+        next_id: AtomicUsize::new(0),
+    }
     // env_logger::Builder::new()
     //     .format(|fmt, record| {
     //         CONTEXT.with(|ctxt| {
@@ -178,18 +336,18 @@ impl<'a> ContextGuard<'a> {
         // only use the reference within this closure, so converting
         // to a raw pointer is safe.
         let raw = context as *const fmt::Display;
-        CONTEXT.with(|ctxt| {
-            ctxt.borrow_mut().push(raw);
-        });
+        // CONTEXT.with(|ctxt| {
+        //     ctxt.borrow_mut().push(raw);
+        // });
         ContextGuard(context)
     }
 }
 
 impl<'a> Drop for ContextGuard<'a> {
     fn drop(&mut self) {
-        CONTEXT.with(|ctxt| {
-            ctxt.borrow_mut().pop();
-        });
+        // CONTEXT.with(|ctxt| {
+        //     // ctxt.borrow_mut().pop();
+        // });
     }
 }
 
