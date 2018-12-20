@@ -691,16 +691,18 @@ where
         disable_protocol_detection_ports,
         drain_rx.clone(),
     );
-    let mut span = span!(
+    let span = span!(
         "serve",
         server = field::display(proxy_name),
         listen = field::display(listen_addr)
     );
     span.clone().enter(move || {
+        let span = span;
         let accept = {
+            let span = span.clone();
             let fut = bound_port.listen_and_fold((), move |(), (connection, remote_addr)| {
-                let s = server.serve(connection, remote_addr);
-                // Logging context is configured by the server.
+                let s = server.serve(connection, remote_addr)
+                    .instrument(span.clone());
                 let r = DefaultExecutor::current()
                     .spawn(Box::new(s))
                     .map_err(task::Error::into_io);
