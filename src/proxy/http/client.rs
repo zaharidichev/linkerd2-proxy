@@ -3,7 +3,9 @@ use http;
 use hyper;
 use std::{error, fmt};
 use std::marker::PhantomData;
-use tokio::executor::Executor;
+use tokio::executor::{self, Executor};
+use tokio_trace::field;
+use tokio_trace_futures::Instrument;
 
 use super::{h1, h2, Settings};
 use super::glue::{Error, HttpBody, HyperConnect};
@@ -197,10 +199,58 @@ where
     fn make(&self, config: &Config) -> Result<Self::Value, Self::Error> {
         debug!("building client={:?}", config);
         let connect = self.connect.make(&config.target)?;
-        let executor = ::logging::Client::proxy(self.proxy_name, config.target.addr)
-            .with_settings(config.settings.clone())
-            .executor();
+        let executor = ClientExecutor {
+            proxy_name: self.proxy_name,
+            dst: config.target.addr,
+            settings: config.settings.clone(),
+        };
         Ok(Client::new(&config.settings, connect, executor))
+    }
+}
+
+#[derive(Clone)]
+struct ClientExecutor<D: fmt::Display> {
+    proxy_name: &'static str,
+    dst: D,
+    settings: Settings,
+}
+
+impl<D: fmt::Display> tokio::executor::Executor for ClientExecutor<D> {
+    fn spawn(
+        &mut self,
+        future: Box<Future<Item = (), Error = ()> + 'static + Send>
+    ) -> Result<(), executor::SpawnError> {
+        let span = span!(
+            "client future",
+            proxy = field::display(self.proxy_name),
+            dst = field::display(&self.dst),
+            proto = field::debug(&self.settings)
+        );
+        let fut = future.instrument(span);
+        ::task::LazyExecutor.spawn(Box::new(fut))
+    }
+}
+
+impl<D: fmt::Display, F> future::Executor<F> for ClientExecutor<D>
+where
+    F: Future<Item = (), Error = ()> + 'static + Send,
+{
+    fn execute(
+        &self,
+        future: F
+    ) -> Result<(), future::ExecuteError<F>> {
+        let span = span!(
+            "client future",
+            proxy = field::display(self.proxy_name),
+            dst = field::display(&self.dst),
+            proto = field::debug(&self.settings)
+        );
+        let fut = future.instrument(span);
+        ::task::LazyExecutor.execute(fut).map_err(|e| {
+            let kind = e.kind();
+            let future = e.into_future().into_inner();
+            future::ExecuteError::new(kind, future)
+        })
     }
 }
 
