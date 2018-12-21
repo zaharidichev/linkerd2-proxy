@@ -169,7 +169,9 @@ where
 
         let subscriber = logging::init();
         let subscriber = tokio_trace::Dispatch::new(subscriber);
-        let mut runtime = runtime.with_dispatch(subscriber.clone());
+        let mut runtime = runtime
+            .with_dispatch(subscriber.clone())
+            .in_span(span!("proxy", section = field::display("proxy")));
 
         tokio_trace::dispatcher::with_default(subscriber.clone(), || {
             info!("using controller at {:?}", control_host_and_port);

@@ -13,7 +13,7 @@ use futures::future::{
     ExecuteErrorKind,
 };
 pub use futures::future::Executor;
-use tokio_trace_futures::WithDispatch;
+use tokio_trace_futures::{Instrument, WithDispatch};
 
 use tokio::{
     executor::{
@@ -72,6 +72,7 @@ pub struct ArcExecutor(Arc<Executor<BoxSendFuture> + Send + Sync>);
 pub struct MainRuntime {
     inner: RuntimeKind,
     dispatch: Option<tokio_trace::Dispatch>,
+    span: tokio_trace::Span<'static>,
 }
 
 enum RuntimeKind {
@@ -236,12 +237,20 @@ impl MainRuntime {
         Self {
             inner,
             dispatch: None,
+            span: tokio_trace::Span::new_disabled(),
         }
     }
 
     pub fn with_dispatch(self, dispatch: tokio_trace::Dispatch) -> Self {
         Self {
             dispatch: Some(dispatch),
+            ..self
+        }
+    }
+
+    pub fn in_span(self, span: tokio_trace::Span<'static>) -> Self {
+        Self {
+            span,
             ..self
         }
     }
@@ -254,7 +263,9 @@ impl MainRuntime {
         use tokio_trace_futures::WithSubscriber;
         let dispatch = self.dispatch.clone()
             .unwrap_or_else(|| tokio_trace::Dispatch::none());
-        let future = future.with_subscriber(dispatch);
+        let future = future
+            .with_subscriber(dispatch)
+            .instrument(self.span.clone());
         match self.inner {
             RuntimeKind::CurrentThread(ref mut rt) => { rt.spawn(future); }
             RuntimeKind::ThreadPool(ref mut rt) => {  rt.spawn(future); }
