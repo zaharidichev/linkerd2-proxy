@@ -170,8 +170,7 @@ where
         let subscriber = logging::init();
         let subscriber = tokio_trace::Dispatch::new(subscriber);
         let mut runtime = runtime
-            .with_dispatch(subscriber.clone())
-            .in_span(span!("proxy", section = field::display("proxy")));
+            .with_dispatch(subscriber.clone());
 
         tokio_trace::dispatcher::with_default(subscriber.clone(), || {
             info!("using controller at {:?}", control_host_and_port);
@@ -594,7 +593,6 @@ where
 
                 inbound.join(outbound)
                     .map(|_| {})
-                    .instrument(span!("proxy", section = field::display("proxy")))
             });
 
             let (_tx, admin_shutdown_signal) = futures::sync::oneshot::channel::<()>();
@@ -695,6 +693,7 @@ where
     );
     let span = span!(
         "serve",
+        section = field::display("proxy"),
         server = field::display(proxy_name),
         listen = field::display(listen_addr)
     );
