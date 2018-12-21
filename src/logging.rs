@@ -6,17 +6,17 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, atomic::{AtomicUsize, Ordering}};
 use std::collections::HashMap;
 
-// use env_logger;
+use env_logger;
 use futures::{Future, Poll};
 use futures::future::{ExecuteError, Executor};
-// use log::{Level};
 use tokio_trace::{
     Level,
     field,
     Metadata,
+    Subscriber,
     span::Id,
-    subscriber::{self, Subscriber},
 };
+use tokio_trace_log::{format_trace, AsLog};
 
 const ENV_LOG: &str = "LINKERD2_PROXY_LOG";
 
@@ -25,9 +25,7 @@ thread_local! {
 }
 
 pub struct LogSubscriber {
-    // RwLock will eventually be used to allow dynamic loglevel changes...
-    // filter: RwLock<env_logger::Filter>,
-
+    filter: env_logger::filter::Filter,
     // TODO: replace hash map with a smarter storage (we can use IDs as arena indexes...)
     in_progress: Mutex<HashMap<Id, Line>>,
     next_id: AtomicUsize,
@@ -66,9 +64,8 @@ impl Line {
 
 impl Subscriber for LogSubscriber {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        // WORK IN PROGRESS ---- REMOVE BEFORE FLIGHT
         if metadata.fields().iter().any(|f| f.name() == Some("message")) {
-            metadata.level() <= &tokio_trace::Level::DEBUG
+            self.filter.enabled(&metadata.as_log())
         } else {
             true
         }
@@ -166,38 +163,18 @@ impl Subscriber for LogSubscriber {
 }
 
 pub fn init() -> LogSubscriber {
-    // TODO: better glue
-    // let _ = env_logger::Builder::from_env(
-    //         env_logger::Env::new().filter(ENV_LOG)
-    //     )
-    //     .format(|_, record| tokio_trace_log::format_trace(record))
-    //     .try_init();
+    // Filter to be used by the trace logger.
+    let filter = env_logger::filter::Builder::from_env(ENV_LOG)
+        .build();
+    // Adapter turning log records into traces.
+    let _ = env_logger::Builder::from_env(ENV_LOG)
+        .format(|_, record| format_trace(record))
+        .try_init();
     LogSubscriber {
+        filter,
         in_progress: Mutex::new(HashMap::new()),
         next_id: AtomicUsize::new(0),
     }
-    // env_logger::Builder::new()
-    //     .format(|fmt, record| {
-    //         CONTEXT.with(|ctxt| {
-    //             let level = match record.level() {
-    //                 Level::Trace => "TRCE",
-    //                 Level::Debug => "DBUG",
-    //                 Level::Info => "INFO",
-    //                 Level::Warn => "WARN",
-    //                 Level::Error => "ERR!",
-    //             };
-    //             writeln!(
-    //                fmt,
-    //                 "{} {}{} {}",
-    //                 level,
-    //                 Context(&ctxt.borrow()),
-    //                 record.target(),
-    //                 record.args()
-    //             )
-    //         })
-    //     })
-    //     .parse(&env::var(ENV_LOG).unwrap_or_default())
-    //     .init();
 }
 
 /// Execute a closure with a `Display` item attached to allow log messages.
