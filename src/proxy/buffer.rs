@@ -4,6 +4,8 @@ use std::{error, fmt, marker::PhantomData};
 
 pub use self::tower_buffer::{Buffer, Error as ServiceError, SpawnError};
 
+use tokio_trace;
+use tokio_trace_futures::Instrument;
 use logging;
 use svc;
 
@@ -79,7 +81,8 @@ where
 
     fn make(&self, target: &T) -> Result<Self::Value, Self::Error> {
         let inner = self.inner.make(&target).map_err(Error::Stack)?;
-        let executor = logging::context_executor(target.clone());
+        let span: tokio_trace::Span<'static> = span!("buffer", target = tokio_trace::field::display(target));
+        let executor = ::task::LazyExecutor.instrument(span);
         Buffer::new(inner, &executor).map_err(Error::Spawn)
     }
 }
