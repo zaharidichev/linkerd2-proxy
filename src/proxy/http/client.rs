@@ -222,7 +222,7 @@ impl<D: fmt::Display> tokio::executor::Executor for ClientExecutor<D> {
     ) -> Result<(), executor::SpawnError> {
         let span = span!(
             "client future",
-            proxy = field::display(self.proxy_name),
+            client = field::display(self.proxy_name),
             dst = field::display(&self.dst),
             proto = field::debug(&self.settings)
         );
@@ -241,7 +241,7 @@ where
     ) -> Result<(), future::ExecuteError<F>> {
         let span = span!(
             "client future",
-            proxy = field::display(self.proxy_name),
+            client = field::display(self.proxy_name),
             dst = field::display(&self.dst),
             proto = field::debug(&self.settings)
         );
@@ -368,8 +368,11 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<B>) -> Self::Future {
-        debug!("client request: method={} uri={} version={:?} headers={:?}",
-            req.method(), req.uri(), req.version(), req.headers());
+        debug!( { method = field::display(req.method()),
+                uri = field::display(req.uri()),
+                version = field::debug(req.version()),
+                headers = field::debug(req.headers()) }, "client request"
+        );
         match *self {
             ClientService::Http1(ref h1) => {
                 let upgrade = req.extensions_mut().remove::<Http11Upgrade>();
