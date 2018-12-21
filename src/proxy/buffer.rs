@@ -81,7 +81,7 @@ where
 
     fn make(&self, target: &T) -> Result<Self::Value, Self::Error> {
         let inner = self.inner.make(&target).map_err(Error::Stack)?;
-        let span: tokio_trace::Span<'static> = span!("buffer", target = tokio_trace::field::display(target));
+        let span = span!("buffer", _target = tokio_trace::field::display(target));
         let executor = ::task::LazyExecutor.instrument(span);
         Buffer::new(inner, &executor).map_err(Error::Spawn)
     }

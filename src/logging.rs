@@ -57,8 +57,7 @@ impl Line {
         let name = key.name();
         match name {
             Some("message") => write!(&mut self.message, "{:?}", value),
-            // TODO: should we be special-casing this?
-            Some("section") => write!(&mut self.fields, "{:?} ", value),
+            Some(name) if name.starts_with('_') => write!(&mut self.fields, "{:?} ", value),
             Some(name) => write!(&mut self.fields, "{}={:?} ", name, value),
             None => write!(&mut self.fields, "{:?} ", value),
         }

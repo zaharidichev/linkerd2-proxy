@@ -600,7 +600,7 @@ where
                 thread::Builder::new()
                     .name("admin".into())
                     .spawn(move || {
-                        let mut span = span!("admin", section = field::display("admin"));
+                        let mut span = span!("admin", _section = field::display("admin"));
                         span.enter(|| {
                             use api::tap::server::TapServer;
 
@@ -693,7 +693,7 @@ where
     );
     let span = span!(
         "serve",
-        section = field::display("proxy"),
+        _section = field::display("proxy"),
         server = field::display(proxy_name),
         listen = field::display(listen_addr)
     );
