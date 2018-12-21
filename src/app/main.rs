@@ -760,29 +760,35 @@ where
     N: svc::MakeService<(), http::Request<tower_h2::RecvBody>, Response = http::Response<B>>
         + Send
         + 'static,
-    tower_h2::server::Connection<Connection, N, ::logging::ServerExecutor, B, ()>:
+    tower_h2::server::Connection<Connection, N, tokio_trace_futures::Instrumented<'static, ::task::LazyExecutor>, B, ()>:
         Future<Item = ()>,
 {
-    let log = logging::admin().server("tap", bound_port.local_addr());
-
-    let h2_builder = h2::server::Builder::default();
-    let server = tower_h2::Server::new(new_service, h2_builder, log.clone().executor());
-    let fut = {
-        let log = log.clone();
-        // TODO: serve over TLS.
-        bound_port
+    let span = span!(
+        "serve_tap",
+        _section = field::display("admin"),
+        server = field::display("tap"),
+        listen = field::display(bound_port.local_addr())
+    );
+    span.clone().enter(move || {
+        let h2_builder = h2::server::Builder::default();
+        let server = tower_h2::Server::new(new_service, h2_builder, ::task::LazyExecutor.instrument(span.clone()));
+        let fut = bound_port
+            // TODO: serve over TLS.
             .listen_and_fold(server, move |mut server, (session, remote)| {
-                let log = log.clone().with_remote(remote);
+                let span = span!(
+                    "serve_connection",
+                    remote = field::display(remote)
+                );
                 let serve = server.serve(session).map_err(|_| ());
 
                 let r = executor::current_thread::TaskExecutor::current()
-                    .spawn_local(Box::new(log.future(serve)))
+                    .spawn_local(Box::new(serve))
                     .map(move |_| server)
                     .map_err(task::Error::into_io);
                 future::result(r)
             })
-            .map_err(|err| { error!("tap listen error: {}", err); })
-    };
+            .map_err(|err| { error!("tap listen error: {}", err); });
 
-    log.future(fut)
+        fut.instrument(span)
+    })
 }
