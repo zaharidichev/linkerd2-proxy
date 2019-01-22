@@ -252,7 +252,7 @@ where
             trace!("protocol detection disabled for {:?}", orig_dst);
             let fwd = tcp::forward(io, &self.connect, &source);
             let fut = self.drain_signal.clone().watch(fwd, |_| {});
-            return log.future(Either::B(fut));
+            return Either::B(log.tcp_forward(orig_dst).future(fut));
         }
 
         let detect_protocol = io.peek()
@@ -269,13 +269,13 @@ where
         let log_clone = log.clone();
         let serve = detect_protocol
             .and_then(move |(proto, io)| match proto {
-                None => Either::A({
+                None => log.tcp_forward(orig_dst).future(Either::A({
                     trace!("did not detect protocol; forwarding TCP");
                     let fwd = tcp::forward(io, &connect, &source);
                     drain_signal.watch(fwd, |_| {})
-                }),
+                })),
 
-                Some(proto) => Either::B(match proto {
+                Some(proto) => log.future(Either::B(match proto {
                     Protocol::Http1 => Either::A({
                         trace!("detected HTTP/1");
                         match route.make(&source) {
@@ -320,9 +320,9 @@ where
                             },
                         }
                     }),
-                }),
+                })),
             });
 
-        log.future(Either::A(serve))
+        Either::A(serve)
     }
 }

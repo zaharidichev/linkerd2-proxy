@@ -210,6 +210,7 @@ pub struct Server {
     name: &'static str,
     listen: SocketAddr,
     remote: Option<SocketAddr>,
+    tcp_dst: Option<SocketAddr>,
 }
 
 /// A utility for logging actions taken on behalf of a client task.
@@ -243,6 +244,7 @@ impl Section {
             name,
             listen,
             remote: None,
+            tcp_dst: None,
         }
     }
 
@@ -283,6 +285,13 @@ impl Server {
         }
     }
 
+    pub fn tcp_forward(self, tcp_dst: Option<SocketAddr>) -> Self {
+        Server {
+            tcp_dst,
+            ..self
+        }
+    }
+
     pub fn executor(self) -> ServerExecutor {
         context_executor(self)
     }
@@ -297,6 +306,9 @@ impl fmt::Display for Server {
         write!(f, "{}={{server={} listen={}", self.section, self.name, self.listen)?;
         if let Some(remote) = self.remote {
             write!(f, " remote={}", remote)?;
+        }
+        if let Some(dst) = self.tcp_dst {
+            write!(f, " dst={} proto=tcp", dst)?;
         }
         write!(f, "}}")
     }
