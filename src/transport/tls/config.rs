@@ -46,9 +46,8 @@ pub struct CommonSettings {
     /// The private key in DER-encoded PKCS#8 form.
     pub private_key: PathBuf,
 
-    /// The identity of the pod being proxied (as opposed to the psuedo-service
-    /// exposed on the proxy's control port).
-    pub pod_identity: Identity,
+    /// The identity of the local application instance.
+    pub local_identity: Identity,
 
     /// The identity of the controller, if given.
     pub controller_identity: Conditional<Identity, ReasonForNoIdentity>,

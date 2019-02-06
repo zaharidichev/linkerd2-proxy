@@ -4,7 +4,7 @@ extern crate tokio_rustls;
 extern crate untrusted;
 extern crate webpki;
 
-use std::fmt;
+//use std::fmt;
 
 use Conditional;
 
@@ -44,35 +44,48 @@ pub use self::{
 #[cfg(test)]
 pub use self::config::test_util as config_test_util;
 
-pub type ConditionalIdentity = Conditional<Identity, ReasonForNoTls>;
-
-/// Describes whether or not a connection was secured with TLS and, if it was
-/// not, the reason why.
-pub type Status = Conditional<(), ReasonForNoTls>;
-
-impl Status {
-    pub fn from<C>(c: &Conditional<C, ReasonForNoTls>) -> Self
-    where
-        C: Clone + fmt::Debug
-    {
-        c.as_ref().map(|_| ())
-    }
+/// All TLS'd communication requires a valid server identity.
+///
+/// Client identities may be missing in some situations, for instance when a
+/// proxy hasn't yet provisioned a certificate for its identity.
+///
+/// Note: `Identity` uses an Arc internally, so clones are intended to be relatively cheap.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct PeerIdentities {
+    pub server: Identity,
+    pub client: Conditional<Identity, ReasonForNoIdentity>,
 }
 
-impl fmt::Display for Status {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match *self {
-            Conditional::Some(()) => "true",
-            Conditional::None(ReasonForNoTls::NoConfig) => "no_config",
-            Conditional::None(ReasonForNoTls::Disabled) => "disabled",
-            Conditional::None(ReasonForNoTls::InternalTraffic) => "internal_traffic",
-            Conditional::None(ReasonForNoTls::NoIdentity(_)) => "no_identity",
-            Conditional::None(ReasonForNoTls::NotProxyTls) => "no_proxy_tls"
-        };
+pub type Status = Conditional<PeerIdentities, ReasonForNoTls>;
+pub type StatusRef<'a> = Conditional<PeerIdentities, ReasonForNoTls>;
 
-        f.pad(s)
-    }
-}
+// /// Describes whether or not a connection was secured with TLS and, if it was
+// /// not, the reason why.
+// pub type Status = Conditional<(), ReasonForNoTls>;
+
+// impl Status {
+//     pub fn from<C>(c: &Conditional<C, ReasonForNoTls>) -> Self
+//     where
+//         C: Clone + fmt::Debug
+//     {
+//         c.as_ref().map(|_| ())
+//     }
+// }
+
+// impl fmt::Display for Status {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         let s = match *self {
+//             Conditional::Some(()) => "true",
+//             Conditional::None(ReasonForNoTls::NoConfig) => "no_config",
+//             Conditional::None(ReasonForNoTls::Disabled) => "disabled",
+//             Conditional::None(ReasonForNoTls::InternalTraffic) => "internal_traffic",
+//             Conditional::None(ReasonForNoTls::NoIdentity(_)) => "no_identity",
+//             Conditional::None(ReasonForNoTls::NotProxyTls) => "no_proxy_tls"
+//         };
+
+//         f.pad(s)
+//     }
+// }
 
 /// Fetch the `tls::Status` of this type.
 pub trait HasStatus {

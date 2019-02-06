@@ -75,7 +75,7 @@ pub struct Connection {
     peek_buf: BytesMut,
 
     /// Whether or not the connection is secured with TLS.
-    tls_peer_identity: tls::ConditionalIdentity,
+    tls_status: tls::Status,
 
     /// If true, the proxy should attempt to detect the protocol for this
     /// connection. If false, protocol detection should be skipped.
@@ -350,10 +350,10 @@ impl Future for ConditionallyUpgradeServerToTls {
                 },
                 ConditionallyUpgradeServerToTls::UpgradeToTls(upgrading) => {
                     let tls_stream = try_ready!(upgrading.poll());
-                    let peer_identity = tls_stream
+                    let status = tls_stream
                         .client_identity()
                         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "tls identity missing"))?;
-                    return Ok(Async::Ready(Connection::tls(BoxedIo::new(tls_stream), peer_identity)));
+                    return Ok(Async::Ready(Connection::tls(BoxedIo::new(tls_stream), status)));
                 }
             }
         }
@@ -447,7 +447,7 @@ impl Connection {
         Connection {
             io: BoxedIo::new(io),
             peek_buf: BytesMut::new(),
-            tls_peer_identity: Conditional::None(reason),
+            tls_status: Conditional::None(reason),
             detect_protocol: false,
             orig_dst: None,
         }
@@ -459,17 +459,17 @@ impl Connection {
         Connection {
             io: BoxedIo::new(io),
             peek_buf,
-            tls_peer_identity: Conditional::None(why_no_tls),
+            tls_status: Conditional::None(why_no_tls),
             detect_protocol: true,
             orig_dst: None,
         }
     }
 
-    fn tls(io: BoxedIo, peer_identity: tls::Identity) -> Self {
+    fn tls(io: BoxedIo, status: tls::Identity) -> Self {
         Connection {
             io: io,
             peek_buf: BytesMut::new(),
-            tls_peer_identity: Conditional::Some(peer_identity),
+            tls_status: Conditional::Some(status),
             detect_protocol: true,
             orig_dst: None,
         }
@@ -490,12 +490,8 @@ impl Connection {
         self.io.local_addr()
     }
 
-    pub fn tls_status(&self) -> tls::Status {
-        tls::Status::from(&self.tls_peer_identity)
-    }
-
-    pub fn tls_peer_identity(&self) -> Conditional<&tls::Identity, tls::ReasonForNoTls> {
-        self.tls_peer_identity.as_ref()
+    pub fn tls_status(&self) -> Conditional<&tls::PeerIdentities, tls::ReasonForNoTls> {
+        self.tls_status.as_ref()
     }
 
     pub fn should_detect_protocol(&self) -> bool {

@@ -89,7 +89,7 @@ pub struct StackConnect<T, M> {
 /// A `Metrics` type exists for each unique `Key`.
 ///
 /// Implements `FmtLabels`.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 struct Key {
     direction: Direction,
     peer: Peer,
@@ -297,7 +297,7 @@ where
 
     fn make(&self, source: &proxy::Source) -> Result<Self::Value, Self::Error> {
         // TODO use source metadata in `key`
-        let key = Key::accept(self.direction, tls::Status::from(&source.tls_peer));
+        let key = Key::accept(self.direction, &source.tls_status);
         let metrics = match self.registry.lock() {
             Ok(mut inner) => Some(inner.get_or_default(key).clone()),
             Err(_) => {

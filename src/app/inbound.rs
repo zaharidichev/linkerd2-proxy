@@ -16,7 +16,7 @@ use {Conditional, NameAddr};
 pub struct Endpoint {
     pub addr: SocketAddr,
     pub dst_name: Option<NameAddr>,
-    pub tls_client_id: tls::ConditionalIdentity,
+    pub tls_status: tls::Status,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -52,10 +52,10 @@ impl tap::Inspect for Endpoint {
         req.extensions().get::<Source>().map(|s| s.remote)
     }
 
-    fn src_tls<'a, B>(&self, req: &'a http::Request<B>) -> Conditional<&'a tls::Identity, tls::ReasonForNoTls> {
+    fn src_tls<B>(&self, req: &http::Request<B>) -> Conditional<tls::PeerIdentities, tls::ReasonForNoTls> {
         req.extensions()
             .get::<Source>()
-            .map(|s| s.tls_peer.as_ref())
+            .map(|s| s.tls_status.clone())
             .unwrap_or_else(|| Conditional::None(tls::ReasonForNoTls::Disabled))
     }
 
@@ -67,7 +67,7 @@ impl tap::Inspect for Endpoint {
         None
     }
 
-    fn dst_tls<B>(&self, _: &http::Request<B>) -> Conditional<&tls::Identity, tls::ReasonForNoTls> {
+    fn dst_tls<B>(&self, _: &http::Request<B>) -> Conditional<tls::PeerIdentities, tls::ReasonForNoTls> {
         Conditional::None(tls::ReasonForNoTls::InternalTraffic)
     }
 
@@ -98,15 +98,10 @@ impl<A> router::Recognize<http::Request<A>> for RecognizeEndpoint {
     type Target = Endpoint;
 
     fn recognize(&self, req: &http::Request<A>) -> Option<Self::Target> {
-        let src = req.extensions().get::<Source>();
+        let src = req.extensions().get::<Source>()?;
         debug!("inbound endpoint: src={:?}", src);
-        let addr = src
-            .and_then(Source::orig_dst_if_not_local)
-            .or(self.default_addr)?;
 
-        let tls_client_id = src
-            .map(|s| s.tls_peer.clone())
-            .unwrap_or_else(|| Conditional::None(tls::ReasonForNoTls::Disabled));
+        let addr = src.orig_dst_if_not_local().or(self.default_addr)?;
 
         let dst_name = req
             .extensions()
@@ -118,7 +113,7 @@ impl<A> router::Recognize<http::Request<A>> for RecognizeEndpoint {
         Some(Endpoint {
             addr,
             dst_name,
-            tls_client_id,
+            tls_status: src.tls_status.clone(),
         })
     }
 }
@@ -329,18 +324,20 @@ pub mod client_id {
         fn make(&self, source: &Source) -> Result<Self::Value, Self::Error> {
             let svc = self.inner.make(source)?;
 
-            if let Conditional::Some(ref id) = source.tls_peer {
-                match HeaderValue::from_str(id.as_ref()) {
-                    Ok(value) => {
-                        debug!("l5d-client-id enabled for {:?}", source);
-                        return Ok(svc::Either::A(Service {
-                            inner: svc,
-                            value,
-                            _marker: PhantomData,
-                        }));
-                    },
-                    Err(_err) => {
-                        warn!("l5d-client-id identity header is invalid: {:?}", source);
+            if let Conditional::Some(ref peers) = source.tls_status {
+                if let Conditional::Some(ref id) = peers.client {
+                    match HeaderValue::from_str(id.as_ref()) {
+                        Ok(value) => {
+                            debug!("l5d-client-id enabled for {:?}", source);
+                            return Ok(svc::Either::A(Service {
+                                inner: svc,
+                                value,
+                                _marker: PhantomData,
+                            }));
+                        },
+                        Err(_err) => {
+                            warn!("l5d-client-id identity header is invalid: {:?}", source);
+                        }
                     }
                 }
             }
@@ -397,15 +394,14 @@ mod tests {
     use Conditional;
 
     fn make_h1_endpoint(addr: net::SocketAddr) -> Endpoint {
-        let tls_client_id = TLS_DISABLED;
         Endpoint {
             addr,
             dst_name: None,
-            tls_client_id,
+            tls_status: TLS_DISABLED,
         }
     }
 
-    const TLS_DISABLED: tls::ConditionalIdentity =
+    const TLS_DISABLED: tls::Status =
         Conditional::None(tls::ReasonForNoTls::Disabled);
 
     quickcheck! {

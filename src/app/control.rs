@@ -26,10 +26,6 @@ impl Config {
     pub fn addr(&self) -> &Addr {
         &self.addr
     }
-
-    pub fn tls_status(&self) -> tls::Status {
-        self.tls_config.as_ref().map(|_| ())
-    }
 }
 
 impl svc::watch::WithUpdate<tls::ConditionalClientConfig> for Config {
