@@ -58,6 +58,7 @@ pub struct CommonSettings {
 struct CommonConfig {
     root_cert_store: rustls::RootCertStore,
     cert_resolver: Arc<CertResolver>,
+    local_identity: Conditional<Identity, ReasonForNoIdentity>,
 }
 
 /// Validated configuration for TLS servers.
@@ -281,11 +282,11 @@ impl CommonConfig {
             rustls::ClientConfig::new().get_verifier().verify_server_cert(
                     &root_cert_store,
                     &cert_chain,
-                    settings.pod_identity.as_dns_name_ref(),
+                    settings.local_identity.as_dns_name_ref(),
                     &[]) // No OCSP
                 .map(|_| ())
                 .map_err(|err| {
-                    error!("validating certificate failed for {:?}: {}", settings.pod_identity, err);
+                    error!("validating certificate failed for {:?}: {}", settings.local_identity, err);
                     Error::EndEntityCertIsNotValid(err)
                 })?;
 
@@ -298,6 +299,7 @@ impl CommonConfig {
         Ok(Self {
             root_cert_store,
             cert_resolver: Arc::new(cert_resolver),
+            local_identity
         })
     }
 
@@ -525,7 +527,7 @@ pub mod test_util {
         pub fn to_settings(&self) -> CommonSettings {
             let dir = PathBuf::from("src/transport/tls/testdata");
             CommonSettings {
-                pod_identity: Identity::from_sni_hostname(self.identity.as_bytes()).unwrap(),
+                local_identity: Identity::from_sni_hostname(self.identity.as_bytes()).unwrap(),
                 controller_identity: Conditional::None(ReasonForNoIdentity::NotConfigured),
                 trust_anchors: dir.join(self.trust_anchors),
                 end_entity_cert: dir.join(self.end_entity_cert),
@@ -561,7 +563,7 @@ pub mod test_util {
                 Conditional::None(_) => unreachable!(),
             };
             ConnectionConfig {
-                server_identity: settings.pod_identity,
+                server_identity: settings.local_identity,
                 config,
             }
         }

@@ -26,6 +26,10 @@ impl Config {
     pub fn addr(&self) -> &Addr {
         &self.addr
     }
+
+    fn tls_server_identity(&self) -> Conditional<tls::Identity, tls::ReasonForNoTls> {
+        unimplemented!()
+    }
 }
 
 impl svc::watch::WithUpdate<tls::ConditionalClientConfig> for Config {

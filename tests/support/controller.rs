@@ -335,7 +335,7 @@ pub fn destination_add_tls(
                         tls_identity: Some(pb::TlsIdentity {
                             strategy: Some(pb::tls_identity::Strategy::K8sPodIdentity(
                                 pb::tls_identity::K8sPodIdentity {
-                                    pod_identity: pod.into(),
+                                    local_identity: pod.into(),
                                     controller_ns: controller_ns.into(),
                                 }
                             )),

@@ -54,7 +54,7 @@ fn proxy_to_proxy_tls_pass_through_when_identity_does_not_match() {
     // Misuse the client's identity instead of the server's identity. Any
     // identity other than `server_tls.server_identity` would work.
     let client_tls = tls::config_test_util::BAR_NS1.client(
-        tls::config_test_util::BAR_NS1.to_settings().pod_identity.clone());
+        tls::config_test_util::BAR_NS1.to_settings().local_identity.clone());
 
     let (client_result, server_result) = run_test(
         Conditional::Some(client_tls), |conn| write_then_read(conn, PING),

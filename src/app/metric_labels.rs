@@ -13,7 +13,7 @@ use super::{control, classify, dst, inbound, outbound};
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ControlLabels {
     addr: Addr,
-    tls_status: tls::Status,
+    tls_server_id: Conditional<tls::Identity, tls::RasonForNoTls>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

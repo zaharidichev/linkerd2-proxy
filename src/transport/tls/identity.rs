@@ -30,7 +30,7 @@ impl Identity {
                 if controller_namespace != Some(i.controller_ns.as_ref()) {
                     return Ok(None);
                 }
-                Self::from_sni_hostname(i.pod_identity.as_bytes()).map(Some)
+                Self::from_sni_hostname(i.local_identity.as_bytes()).map(Some)
             },
             None => Ok(None), // No TLS.
         }
