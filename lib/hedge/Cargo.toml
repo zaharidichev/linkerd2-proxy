@@ -1,0 +1,12 @@
+[package]
+name = "linkerd2-hedge"
+version = "0.1.0"
+authors = ["Alex Leong <alex@buoyant.io>"]
+publish = false
+
+[dependencies]
+futures = "0.1"
+linkerd2-metrics = { version = "0.1.0", path = "../metrics" }
+tower-service = { git = "https://github.com/tower-rs/tower" }
+tower-retry = { git = "https://github.com/tower-rs/tower" }
+tokio-timer = "0.2.6"

@@ -13,7 +13,7 @@ extern crate quickcheck;
 
 mod counter;
 mod gauge;
-mod histogram;
+pub mod histogram;
 pub mod latency;
 mod prom;
 mod scopes;

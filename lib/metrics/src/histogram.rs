@@ -88,6 +88,32 @@ impl<V: Into<u64>> Histogram<V> {
         self.buckets[idx].incr();
         self.sum += value;
     }
+
+    pub fn percentile(&self, p: f32) -> u64 {
+        let count: u64 = self.buckets.iter().map(|b| b.value()).sum();
+        let mut nth: u64 = (count as f32 * p) as u64;
+        for (i, bucket) in self.buckets.iter().enumerate() {
+            if nth < bucket.value() {
+                let bucket_fraction = (nth as f32) / (bucket.value() as f32);
+                let lower = if i == 0 {
+                    0
+                } else {
+                    match self.bounds.0[i-1] {
+                        Bucket::Le(bound) => bound,
+                        Bucket::Inf => std::u64::MAX, // This shouldn't happen.
+                    }
+                };
+                let upper = match self.bounds.0[i] {
+                    Bucket::Le(bound) => bound,
+                    Bucket::Inf => std::u64::MAX,
+                };
+                return ((upper - lower) as f32 * bucket_fraction) as u64 + lower;
+            } else {
+                nth -= self.buckets[i].value();
+            }
+        }
+        panic!("Ran off the end of the buckets");
+    }
 }
 
 #[cfg(any(test, feature = "test_util"))]

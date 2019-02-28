@@ -532,6 +532,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "linkerd2-hedge"
+version = "0.1.0"
+dependencies = [
+ "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linkerd2-metrics 0.1.0",
+ "tokio-timer 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tower-retry 0.1.0 (git+https://github.com/tower-rs/tower)",
+ "tower-service 0.2.0 (git+https://github.com/tower-rs/tower)",
+]
+
+[[package]]
 name = "linkerd2-metrics"
 version = "0.1.0"
 dependencies = [
@@ -567,6 +578,7 @@ dependencies = [
  "ipnet 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
  "linkerd2-fs-watch 0.1.0",
+ "linkerd2-hedge 0.1.0",
  "linkerd2-metrics 0.1.0",
  "linkerd2-never 0.1.0",
  "linkerd2-proxy-api 0.1.6 (git+https://github.com/linkerd/linkerd2-proxy-api?tag=v0.1.6)",
