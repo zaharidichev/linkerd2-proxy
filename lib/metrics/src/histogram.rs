@@ -89,8 +89,11 @@ impl<V: Into<u64>> Histogram<V> {
         self.sum += value;
     }
 
-    pub fn percentile(&self, p: f32) -> u64 {
+    pub fn percentile(&self, p: f32, min_samples: u64) -> Option<u64> {
         let count: u64 = self.buckets.iter().map(|b| b.value()).sum();
+        if count < min_samples {
+            return None;
+        }
         let mut nth: u64 = (count as f32 * p) as u64;
         for (i, bucket) in self.buckets.iter().enumerate() {
             if nth < bucket.value() {
@@ -107,7 +110,7 @@ impl<V: Into<u64>> Histogram<V> {
                     Bucket::Le(bound) => bound,
                     Bucket::Inf => std::u64::MAX,
                 };
-                return ((upper - lower) as f32 * bucket_fraction) as u64 + lower;
+                return Some(((upper - lower) as f32 * bucket_fraction) as u64 + lower);
             } else {
                 nth -= self.buckets[i].value();
             }

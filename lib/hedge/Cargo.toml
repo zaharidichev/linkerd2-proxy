@@ -10,3 +10,7 @@ linkerd2-metrics = { version = "0.1.0", path = "../metrics" }
 tower-service = { git = "https://github.com/tower-rs/tower" }
 tower-retry = { git = "https://github.com/tower-rs/tower" }
 tokio-timer = "0.2.6"
+
+[dev-dependencies]
+tower-mock = { git = "https://github.com/tower-rs/tower" }
+tokio-executor = "0.1.2"

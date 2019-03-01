@@ -28,7 +28,7 @@ pub struct Hedge<P, S> {
     service: S,
     latency_percentile: f32,
     // TODO: rotate this histogram on a regular interval
-    latency_histogram: Arc<Mutex<Histogram<latency::Ms>>>,
+    pub latency_histogram: Arc<Mutex<Histogram<latency::Ms>>>,
 }
 
 pub struct ResponseFuture<P, S, Request>
@@ -41,7 +41,7 @@ where
     hedge: Hedge<P, S>,
     orig_fut: S::Future,
     hedge_fut: Option<S::Future>,
-    delay: Delay,
+    delay: Option<Delay>,
 }
 
 impl<P, S> Hedge<P, S> {
@@ -81,15 +81,17 @@ where
         let cloned = self.policy.clone_request(&request);
         let orig_fut = self.service.call(request);
 
+        let start = clock::now();
         // TODO: Only create a hedge timeout if there are sufficiently many
         // data points in the histogram.
-        let hedge_timeout = self
+        let delay = self
             .latency_histogram
             .lock()
             .unwrap()
-            .percentile(self.latency_percentile);
-        let start = clock::now();
-        let delay = Delay::new(start + Duration::from_millis(hedge_timeout));
+            .percentile(self.latency_percentile, 10)
+            .map(|hedge_timeout| {
+                Delay::new(start + Duration::from_millis(hedge_timeout))
+            });
 
         ResponseFuture {
             request: cloned,
@@ -142,7 +144,12 @@ where
             } else {
                 // Original future is pending, but hedge hasn't started.  Check
                 // the delay.
-                match self.delay.poll() {
+                let delay = match self.delay.as_mut() {
+                    Some(d) => d,
+                    // No delay, can't retry.
+                    None => return Ok(Async::NotReady),
+                };
+                match delay.poll() {
                     Ok(Async::Ready(_)) => {
                         try_ready!(self.hedge.poll_ready());
                         if let Some(req) = self.request.take() {
