@@ -118,7 +118,7 @@ pub struct Config {
 
     pub dns_canonicalize_timeout: Duration,
 
-    pub h2_settings: H2Config,
+    pub h2_settings: H2Settings,
 }
 
 #[derive(Clone, Debug)]
@@ -130,7 +130,7 @@ pub struct Namespaces {
 }
 
 #[derive(Copy, Clone, Debug, Default)]
-pub struct H2Config {
+pub struct H2Settings {
     pub initial_stream_window_size: Option<u32>,
     pub initial_connection_window_size: Option<u32>,
 }
@@ -295,8 +295,9 @@ const ENV_DNS_CANONICALIZE_TIMEOUT: &str = "LINKERD2_PROXY_DNS_CANONICALIZE_TIME
 /// Configure the stream or connection level flow control setting for HTTP2.
 ///
 /// If unspecified, the default value of 65,535 is used.
-const ENV_INITIAL_STREAM_WINDOW_SIZE: &str = "LINKERD2_PROXY_INITIAL_STREAM_WINDOW_SIZE";
-const ENV_INITIAL_CONNECTION_WINDOW_SIZE: &str = "LINKERD2_PROXY_INITIAL_CONNECTION_WINDOW_SIZE";
+const ENV_INITIAL_STREAM_WINDOW_SIZE: &str = "LINKERD2_PROXY_HTTP2_INITIAL_STREAM_WINDOW_SIZE";
+const ENV_INITIAL_CONNECTION_WINDOW_SIZE: &str =
+    "LINKERD2_PROXY_HTTP2_INITIAL_CONNECTION_WINDOW_SIZE";
 
 // Default values for various configuration fields
 const DEFAULT_OUTBOUND_LISTENER: &str = "tcp://127.0.0.1:4140";
@@ -631,7 +632,7 @@ impl<'a> TryFrom<&'a Strings> for Config {
 
             dns_canonicalize_timeout,
 
-            h2_settings: H2Config {
+            h2_settings: H2Settings {
                 initial_stream_window_size: initial_stream_window_size?,
                 initial_connection_window_size: initial_connection_window_size?,
             },

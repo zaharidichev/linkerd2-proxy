@@ -37,7 +37,7 @@ use telemetry;
 use transport::{self, connect, keepalive, tls, BoundPort, Connection, GetOriginalDst};
 use {Addr, Conditional};
 
-use super::config::{Config, H2Config};
+use super::config::{Config, H2Settings};
 use super::dst::DstAddr;
 use super::profiles::Client as ProfilesClient;
 
@@ -697,7 +697,7 @@ fn serve<A, C, R, B, G>(
     connect: C,
     router: R,
     disable_protocol_detection_ports: IndexSet<u16>,
-    h2_settings: H2Config,
+    h2_settings: H2Settings,
     get_orig_dst: G,
     drain_rx: drain::Watch,
 ) -> impl Future<Item = (), Error = io::Error> + Send + 'static

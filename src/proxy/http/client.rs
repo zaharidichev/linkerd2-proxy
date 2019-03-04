@@ -9,7 +9,7 @@ use super::glue::{Error, HttpBody, HyperConnect};
 use super::normalize_uri::ShouldNormalizeUri;
 use super::upgrade::{Http11Upgrade, HttpConnect};
 use super::{h1, h2, Settings};
-use app::config::H2Config;
+use app::config::H2Settings;
 use svc::{self, stack_per_request::ShouldStackPerRequest};
 use transport::{connect, tls};
 
@@ -29,7 +29,7 @@ pub struct Config {
 #[derive(Debug)]
 pub struct Layer<B> {
     proxy_name: &'static str,
-    h2_settings: H2Config,
+    h2_settings: H2Settings,
     _p: PhantomData<fn() -> B>,
 }
 
@@ -45,7 +45,7 @@ where
 {
     connect: C,
     proxy_name: &'static str,
-    h2_settings: H2Config,
+    h2_settings: H2Settings,
     _p: PhantomData<fn() -> B>,
 }
 
@@ -126,7 +126,7 @@ impl fmt::Display for Config {
 
 // === impl Layer ===
 
-pub fn layer<B>(proxy_name: &'static str, h2_settings: H2Config) -> Layer<B>
+pub fn layer<B>(proxy_name: &'static str, h2_settings: H2Settings) -> Layer<B>
 where
     B: hyper::body::Payload + Send + 'static,
 {
@@ -229,7 +229,7 @@ where
     B: hyper::body::Payload + 'static,
 {
     /// Create a new `Client`, bound to a specific protocol (HTTP/1 or HTTP/2).
-    pub fn new<E>(settings: &Settings, connect: C, executor: E, h2_settings: H2Config) -> Self
+    pub fn new<E>(settings: &Settings, connect: C, executor: E, h2_settings: H2Settings) -> Self
     where
         E: Executor + Clone,
         E: future::Executor<Box<Future<Item = (), Error = ()> + Send + 'static>>

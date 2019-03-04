@@ -346,7 +346,7 @@ pub mod client {
     use hyper::body::Payload;
     use std::marker::PhantomData;
 
-    use super::super::config::H2Config;
+    use super::super::config::H2Settings;
     use proxy::http;
     use svc;
     use transport::connect;
@@ -443,7 +443,7 @@ pub mod client {
                 .clone()
                 .with_remote(target.connect.addr)
                 .executor();
-            Ok(http::h2::Connect::new(c, e, H2Config::default()))
+            Ok(http::h2::Connect::new(c, e, H2Settings::default()))
         }
     }
 }

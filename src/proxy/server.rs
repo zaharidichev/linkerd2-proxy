@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::{error, fmt};
 
 use super::Accept;
-use app::config::H2Config;
+use app::config::H2Settings;
 use drain;
 use never::Never;
 use proxy::http::{
@@ -227,7 +227,7 @@ where
         &self,
         connection: Connection,
         remote_addr: SocketAddr,
-        h2_settings: H2Config,
+        h2_settings: H2Settings,
     ) -> impl Future<Item = (), Error = ()> {
         let orig_dst = connection.original_dst_addr();
         let disable_protocol_detection = !connection.should_detect_protocol();
