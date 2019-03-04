@@ -5,13 +5,18 @@ extern crate tokio_timer;
 extern crate tower_service;
 
 use futures::{Async, Future, Poll};
-use linkerd2_metrics::histogram::{Bounds, Histogram};
+use linkerd2_metrics::histogram::Histogram;
 use linkerd2_metrics::latency;
 use tokio_timer::{clock, Delay};
 use tower_service::Service;
 
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+mod rotating;
+
+use rotating::Rotating;
 
 /// A "retry policy" to classify if a request should be pre-emptively retried.
 pub trait Policy<Request>: Sized {
@@ -22,13 +27,13 @@ pub trait Policy<Request>: Sized {
 /// A middleware pre-emptively retries requests which have been outstanding for
 /// longer than a given latency percentile.  If either of the original future
 /// or the retry future completes, that value is used.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Hedge<P, S> {
     policy: P,
     service: S,
     latency_percentile: f32,
-    // TODO: rotate this histogram on a regular interval
-    pub latency_histogram: Arc<Mutex<Histogram<latency::Ms>>>,
+    // A rotating histogram is used to track response latency.
+    pub latency_histogram: Rc<Mutex<Rotating<Histogram<latency::Ms>>>>,
 }
 
 pub struct ResponseFuture<P, S, Request>
@@ -36,11 +41,15 @@ where
     P: Policy<Request>,
     S: Service<Request>,
 {
+    // If the request was clonable, a clone is stored.
     request: Option<Request>,
+    // The time of the original call to the inner service.  Used to calculate
+    // response latency.
     start: Instant,
     hedge: Hedge<P, S>,
     orig_fut: S::Future,
     hedge_fut: Option<S::Future>,
+    // A future representing when to start the hedge request.
     delay: Option<Delay>,
 }
 
@@ -49,17 +58,21 @@ impl<P, S> Hedge<P, S> {
         policy: P,
         service: S,
         latency_percentile: f32,
-        bounds: &'static Bounds,
+        rotation_period: Duration,
     ) -> Self
     where
         P: Policy<Request> + Clone,
         S: Service<Request>,
     {
+        let new: fn() -> Histogram<latency::Ms> = || {
+            Histogram::new(latency::BOUNDS)
+        };
+        let latency_histogram = Rc::new(Mutex::new(Rotating::new(rotation_period, new)));
         Hedge {
             policy,
             service,
             latency_percentile,
-            latency_histogram: Arc::new(Mutex::new(Histogram::new(bounds))),
+            latency_histogram,
         }
     }
 }
@@ -82,12 +95,15 @@ where
         let orig_fut = self.service.call(request);
 
         let start = clock::now();
-        // TODO: Only create a hedge timeout if there are sufficiently many
-        // data points in the histogram.
-        let delay = self
-            .latency_histogram
-            .lock()
-            .unwrap()
+        // Find the nth percentile latency from the read side of the histogram.
+        // Requests which take longer than this will be pre-emptively retried.
+        let read = self.latency_histogram.lock().unwrap().read();
+        // TODO: Consider adding a minimum delay for hedge requests (perhaps as
+        // a factor of the p50 latency).
+        let delay = read.lock().unwrap()
+            // We will only issue a hedge request if there are sufficiently many
+            // data points in the histogram to give us confidence about the
+            // distribution.
             .percentile(self.latency_percentile, 10)
             .map(|hedge_timeout| {
                 Delay::new(start + Duration::from_millis(hedge_timeout))
@@ -109,9 +125,10 @@ impl<P, S, Request> ResponseFuture<P, S, Request> where
     S: Service<Request>,
 {
     /// Record the latency of a completed request in the latency histogram.
-    fn record(&self) {
+    fn record(&mut self) {
         let duration = clock::now() - self.start;
-        self.hedge.latency_histogram.lock().unwrap().add(duration);
+        let write = self.hedge.latency_histogram.lock().unwrap().write();
+        write.lock().unwrap().add(duration);
     }
 }
 
