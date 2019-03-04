@@ -117,6 +117,8 @@ pub struct Config {
     pub dns_max_ttl: Option<Duration>,
 
     pub dns_canonicalize_timeout: Duration,
+
+    pub h2_settings: H2Config,
 }
 
 #[derive(Clone, Debug)]
@@ -125,6 +127,12 @@ pub struct Namespaces {
 
     /// `None` if TLS is disabled; otherwise must be `Some`.
     pub tls_controller: Option<String>,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct H2Config {
+    pub initial_stream_window_size: Option<u32>,
+    pub initial_connection_window_size: Option<u32>,
 }
 
 /// Configuration settings for binding a listener.
@@ -283,6 +291,12 @@ const ENV_DNS_MAX_TTL: &str = "LINKERD2_PROXY_DNS_MAX_TTL";
 /// The amount of time to wait for a DNS query to succeed before falling back to
 /// an uncanonicalized address.
 const ENV_DNS_CANONICALIZE_TIMEOUT: &str = "LINKERD2_PROXY_DNS_CANONICALIZE_TIMEOUT";
+
+/// Configure the stream or connection level flow control setting for HTTP2.
+///
+/// If unspecified, the default value of 65,535 is used.
+const ENV_INITIAL_STREAM_WINDOW_SIZE: &str = "LINKERD2_PROXY_INITIAL_STREAM_WINDOW_SIZE";
+const ENV_INITIAL_CONNECTION_WINDOW_SIZE: &str = "LINKERD2_PROXY_INITIAL_CONNECTION_WINDOW_SIZE";
 
 // Default values for various configuration fields
 const DEFAULT_OUTBOUND_LISTENER: &str = "tcp://127.0.0.1:4140";
@@ -463,6 +477,11 @@ impl<'a> TryFrom<&'a Strings> for Config {
         let tls_controller_identity = tls_controller_identity?;
         let control_host_and_port = control_host_and_port?;
 
+        let initial_stream_window_size =
+            parse(strings, ENV_INITIAL_STREAM_WINDOW_SIZE, parse_number);
+        let initial_connection_window_size =
+            parse(strings, ENV_INITIAL_CONNECTION_WINDOW_SIZE, parse_number);
+
         let tls_settings = match (
             tls_trust_anchors?,
             tls_end_entity_cert?,
@@ -611,6 +630,11 @@ impl<'a> TryFrom<&'a Strings> for Config {
             dns_max_ttl: dns_max_ttl?,
 
             dns_canonicalize_timeout,
+
+            h2_settings: H2Config {
+                initial_stream_window_size: initial_stream_window_size?,
+                initial_connection_window_size: initial_connection_window_size?,
+            },
         })
     }
 }

@@ -37,7 +37,7 @@ use telemetry;
 use transport::{self, connect, keepalive, tls, BoundPort, Connection, GetOriginalDst};
 use {Addr, Conditional};
 
-use super::config::Config;
+use super::config::{Config, H2Config};
 use super::dst::DstAddr;
 use super::profiles::Client as ProfilesClient;
 
@@ -328,7 +328,7 @@ where
                 // Instantiates an HTTP client for for a `client::Config`
                 let client_stack = connect
                     .clone()
-                    .push(client::layer("out"))
+                    .push(client::layer("out", config.h2_settings))
                     .push(reconnect::layer())
                     .push(svc::stack_per_request::layer())
                     .push(normalize_uri::layer());
@@ -482,6 +482,7 @@ where
                     connect,
                     server_stack,
                     config.outbound_ports_disable_protocol_detection,
+                    config.h2_settings,
                     get_original_dst.clone(),
                     drain_rx.clone(),
                 )
@@ -510,7 +511,7 @@ where
                 // Instantiates an HTTP client for for a `client::Config`
                 let client_stack = connect
                     .clone()
-                    .push(client::layer("in"))
+                    .push(client::layer("in", config.h2_settings))
                     .push(reconnect::layer())
                     .push(svc::stack_per_request::layer())
                     .push(normalize_uri::layer());
@@ -627,6 +628,7 @@ where
                     connect,
                     source_stack,
                     config.inbound_ports_disable_protocol_detection,
+                    config.h2_settings,
                     get_original_dst.clone(),
                     drain_rx.clone(),
                 )
@@ -695,6 +697,7 @@ fn serve<A, C, R, B, G>(
     connect: C,
     router: R,
     disable_protocol_detection_ports: IndexSet<u16>,
+    h2_settings: H2Config,
     get_orig_dst: G,
     drain_rx: drain::Watch,
 ) -> impl Future<Item = (), Error = io::Error> + Send + 'static
@@ -732,7 +735,7 @@ where
             .without_protocol_detection_for(disable_protocol_detection_ports)
             .with_original_dst(get_orig_dst);
         let fut = bound_port.listen_and_fold((), move |(), (connection, remote_addr)| {
-            let s = server.serve(connection, remote_addr);
+            let s = server.serve(connection, remote_addr, h2_settings);
             // Logging context is configured by the server.
             let r = DefaultExecutor::current()
                 .spawn(Box::new(s))
