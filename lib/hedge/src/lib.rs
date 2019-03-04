@@ -190,3 +190,12 @@ where
         }
     }
 }
+
+impl<V> rotating::Clear for Histogram<V>
+where
+    V: Into<u64>,
+{
+    fn clear(&mut self) {
+        self.clear_buckets()
+    }
+}

@@ -13,17 +13,22 @@ use tokio_timer::clock;
 pub struct Rotating<T> {
     read: T,
     write: T,
-    new: fn() -> T,
     last_rotation: Instant,
     period: Duration,
 }
 
-impl<T> Rotating<T> {
+pub trait Clear {
+    fn clear(&mut self);
+}
+
+impl<T> Rotating<T>
+where
+    T: Clear,
+{
     pub fn new(period: Duration, new: fn() -> T) -> Rotating<T> {
         Rotating {
             read: new(),
             write: new(),
-            new,
             last_rotation: clock::now(),
             period,
         }
@@ -54,12 +59,12 @@ impl<T> Rotating<T> {
 
     fn rotate(&mut self) {
         mem::swap(&mut self.read, &mut self.write);
-        self.write = (self.new)();
+        self.write.clear();
     }
 
     fn clear(&mut self) {
-        self.read = (self.new)();
-        self.write = (self.new)();
+        self.read.clear();
+        self.write.clear();
     }
 
     fn duration_as_nanos(d: &Duration) -> u64 {

@@ -101,7 +101,7 @@ impl<V: Into<u64>> Histogram<V> {
                 let lower = if i == 0 {
                     0
                 } else {
-                    match self.bounds.0[i-1] {
+                    match self.bounds.0[i - 1] {
                         Bucket::Le(bound) => bound,
                         Bucket::Inf => std::u64::MAX, // This shouldn't happen.
                     }
@@ -116,6 +116,12 @@ impl<V: Into<u64>> Histogram<V> {
             }
         }
         panic!("Ran off the end of the buckets");
+    }
+
+    pub fn clear_buckets(&mut self) {
+        for bucket in self.buckets.iter_mut() {
+            *bucket = Counter::from(0);
+        }
     }
 }
 
