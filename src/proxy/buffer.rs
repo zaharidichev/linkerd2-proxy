@@ -455,6 +455,15 @@ mod tests {
     }
 
     #[test]
+    fn some_test() {
+        let mut mock = tokio_test::clock::MockClock::new();
+        mock.enter(|_handle| {
+            println!("TestTime 1 {:?}", tokio_timer::clock::now());
+            println!("TestTime 2 {:?}", tokio_timer::clock::now());
+        })
+    }
+
+    #[test]
     fn request_aborted_with_idle_service() {
         tokio::run(future::lazy(|| {
             let mut svc = Enqueue::new(

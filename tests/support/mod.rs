@@ -27,6 +27,7 @@ extern crate tokio_rustls;
 extern crate tower_grpc;
 extern crate tower_service;
 extern crate webpki;
+pub extern crate tokio_test;
 
 pub use std::collections::HashMap;
 use std::fmt;
